@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내 단어장 — Word Gacha</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 0 0 40px; }
+  header { background: #667eea; color: #fff; padding: 20px 20px 24px; }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  header p  { font-size: .85rem; opacity: .85; margin-top: 4px; }
+  .back { color: #fff; opacity: .8; text-decoration: none; font-size: .85rem; display: inline-block; margin-bottom: 8px; }
+  .back:hover { opacity: 1; }
+  .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
+
+  /* 입력 폼 */
+  .add-card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .add-card h2 { font-size: 1rem; font-weight: 700; color: #2d3748; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .row input { flex: 1; padding: 11px 13px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: .95rem; outline: none; transition: border-color .2s; }
+  .row input:focus { border-color: #667eea; }
+  .row input::placeholder { color: #cbd5e0; }
+  .submit-btn { width: 100%; padding: 12px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: .95rem; font-weight: 600; cursor: pointer; transition: background .2s; }
+  .submit-btn:hover { background: #5a67d8; }
+  .msg { font-size: .82rem; margin-top: 8px; height: 18px; }
+  .msg.ok  { color: #38a169; }
+  .msg.err { color: #e53e3e; }
+
+  /* 단어 목록 */
+  .section-title { font-size: .85rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .word-list { display: flex; flex-direction: column; gap: 8px; }
+  .word-item { background: #fff; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+  .word-en { font-weight: 700; color: #2d3748; font-size: .95rem; flex: 1; }
+  .word-ko { color: #718096; font-size: .9rem; flex: 1; }
+  .badge { font-size: .72rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .badge.pending  { background: #fefcbf; color: #b7791f; }
+  .badge.approved { background: #c6f6d5; color: #276749; }
+  .empty-words { text-align: center; color: #a0aec0; padding: 32px 0; font-size: .9rem; }
+</style>
+</head>
+<body>
+<header>
+  <a href="index.html" class="back">← 돌아가기</a>
+  <h1 id="studentName">단어장</h1>
+  <p>모르거나 틀린 단어를 추가하세요</p>
+</header>
+
+<div class="container">
+  <div class="add-card">
+    <h2>+ 새 단어 추가</h2>
+    <div class="row">
+      <input id="enInput" type="text" placeholder="영어 단어 (예: ambiguous)">
+    </div>
+    <div class="row">
+      <input id="koInput" type="text" placeholder="한국어 뜻 (예: 모호한)">
+    </div>
+    <button class="submit-btn" id="addBtn">추가하기</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <p class="section-title">내 단어 목록</p>
+  <div id="wordList"><div class="empty-words">단어를 추가해보세요 📝</div></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  const studentId   = sessionStorage.getItem('studentId');
+  const studentName = sessionStorage.getItem('studentName');
+  if (!studentId) { window.location.href = 'index.html'; }
+  document.getElementById('studentName').textContent = studentName + '님의 단어장';
+
+  async function loadWords() {
+    try {
+      const words = await API.getMyWords(studentId);
+      const list  = document.getElementById('wordList');
+      if (!words.length) { list.innerHTML = '<div class="empty-words">단어를 추가해보세요 📝</div>'; return; }
+      list.innerHTML = words.map(w => `
+        <div class="word-item">
+          <span class="word-en">${w.english}</span>
+          <span class="word-ko">${w.korean}</span>
+          <span class="badge ${w.status}">${w.status === 'pending' ? '⏳ 대기중' : '✅ 승인됨'}</span>
+        </div>
+      `).join('');
+    } catch { }
+  }
+
+  async function addWord() {
+    const en  = document.getElementById('enInput').value.trim();
+    const ko  = document.getElementById('koInput').value.trim();
+    const msg = document.getElementById('msg');
+    msg.className = 'msg'; msg.textContent = '';
+    if (!en || !ko) { msg.className = 'msg err'; msg.textContent = '영어 단어와 뜻을 모두 입력하세요.'; return; }
+    try {
+      await API.addWord(studentId, { english: en, korean: ko });
+      document.getElementById('enInput').value = '';
+      document.getElementById('koInput').value = '';
+      msg.className = 'msg ok'; msg.textContent = '추가됐어요! 선생님이 확인 후 승인합니다.';
+      loadWords();
+    } catch (e) {
+      msg.className = 'msg err'; msg.textContent = e.message;
+    }
+  }
+
+  document.getElementById('addBtn').onclick = addWord;
+  document.getElementById('koInput').addEventListener('keydown', e => { if (e.key === 'Enter') addWord(); });
+  loadWords();
+</script>
+</body>
+</html>

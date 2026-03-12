@@ -1,0 +1,488 @@
+require('dotenv').config();
+const express  = require('express');
+const cors     = require('cors');
+const path     = require('path');
+const fs       = require('fs');
+const session  = require('express-session');
+const archiver = require('archiver');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
+
+// ── 스토리지 모드 결정 ─────────────────────────────────────────────
+// Supabase URL이 실제 값이면 Supabase, 아니면 로컬 JSON 사용
+const USE_SUPABASE = process.env.SUPABASE_URL &&
+  process.env.SUPABASE_URL.includes('supabase.co') &&
+  !process.env.SUPABASE_URL.includes('placeholder');
+
+let supabase = null;
+if (USE_SUPABASE) {
+  const { createClient } = require('@supabase/supabase-js');
+  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  console.log('🗄️  Supabase 모드');
+} else {
+  console.log('📁 로컬 JSON 모드 (Supabase 키 없음)');
+}
+
+// ── 로컬 JSON DB ───────────────────────────────────────────────────
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch {}
+  return { students: [], words: [], grammar_qa: [] };
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function now()   { return new Date().toISOString(); }
+
+// ── DB 추상화 레이어 ───────────────────────────────────────────────
+// Supabase와 JSON 모드 모두 같은 인터페이스로 동작
+const DB = {
+  // students
+  async getStudents() {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: true });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    return loadData().students.sort((a, b) => a.created_at > b.created_at ? 1 : -1);
+  },
+  async getStudent(id) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('students').select('*').eq('id', id).single();
+      if (error) throw new Error('학생을 찾을 수 없습니다');
+      return data;
+    }
+    const s = loadData().students.find(s => s.id === id);
+    if (!s) throw new Error('학생을 찾을 수 없습니다');
+    return s;
+  },
+  async addStudent(name) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('students').insert({ name }).select().single();
+      if (error) throw new Error('이미 존재하는 이름이거나 오류가 발생했습니다');
+      return data;
+    }
+    const d = loadData();
+    if (d.students.find(s => s.name === name)) throw new Error('이미 존재하는 이름입니다');
+    const s = { id: newId(), name, created_at: now() };
+    d.students.push(s); saveData(d); return s;
+  },
+  async updateStudent(id, name) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('students').update({ name }).eq('id', id).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const s = d.students.find(s => s.id === id);
+    if (!s) throw new Error('학생을 찾을 수 없습니다');
+    if (d.students.find(s2 => s2.id !== id && s2.name === name)) throw new Error('이미 존재하는 이름입니다');
+    s.name = name; saveData(d); return s;
+  },
+  async deleteStudent(id) {
+    if (USE_SUPABASE) {
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const d = loadData();
+    d.students = d.students.filter(s => s.id !== id);
+    d.words    = d.words.filter(w => w.student_id !== id);
+    saveData(d);
+  },
+
+  // words
+  async getWordsByStudent(studentId) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('words').select('*').eq('student_id', studentId).order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    return loadData().words.filter(w => w.student_id === studentId).sort((a, b) => b.created_at > a.created_at ? 1 : -1);
+  },
+  async getAllWords(status) {
+    if (USE_SUPABASE) {
+      let q = supabase.from('words').select('*, students(name)').order('created_at', { ascending: false });
+      if (status) q = q.eq('status', status);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    let words = d.words.map(w => ({ ...w, students: { name: (d.students.find(s => s.id === w.student_id) || {}).name || '?' } }));
+    if (status) words = words.filter(w => w.status === status);
+    return words.sort((a, b) => b.created_at > a.created_at ? 1 : -1);
+  },
+  async addWord(studentId, fields) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('words').insert({ student_id: studentId, ...fields }).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const w = { id: newId(), student_id: studentId, review_count: 0, wrong_count: 0, box: 1, created_at: now(), ...fields };
+    d.words.push(w); saveData(d); return w;
+  },
+  async updateWord(id, updates) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('words').update(updates).eq('id', id).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const w = d.words.find(w => w.id === id);
+    if (!w) throw new Error('단어를 찾을 수 없습니다');
+    Object.assign(w, updates); saveData(d); return w;
+  },
+  async reviewWord(id, correct) {
+    if (USE_SUPABASE) {
+      const { data: w, error: e } = await supabase.from('words').select('box,review_count,wrong_count').eq('id', id).single();
+      if (e) throw new Error('단어를 찾을 수 없습니다');
+      const upd = { box: correct ? Math.min(w.box + 1, 5) : 1, review_count: w.review_count + 1, wrong_count: correct ? w.wrong_count : w.wrong_count + 1 };
+      const { data, error } = await supabase.from('words').update(upd).eq('id', id).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const w = d.words.find(w => w.id === id);
+    if (!w) throw new Error('단어를 찾을 수 없습니다');
+    w.box          = correct ? Math.min(w.box + 1, 5) : 1;
+    w.review_count = (w.review_count || 0) + 1;
+    w.wrong_count  = correct ? (w.wrong_count || 0) : (w.wrong_count || 0) + 1;
+    saveData(d); return w;
+  },
+  async deleteWord(id) {
+    if (USE_SUPABASE) {
+      const { error } = await supabase.from('words').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const d = loadData();
+    d.words = d.words.filter(w => w.id !== id);
+    saveData(d);
+  },
+
+  // grammar_qa
+  async getGrammar() {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('grammar_qa').select('*').order('created_at', { ascending: true });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    return loadData().grammar_qa.sort((a, b) => a.created_at > b.created_at ? 1 : -1);
+  },
+  async addGrammar(fields) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('grammar_qa').insert(fields).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const g = { id: newId(), created_at: now(), ...fields };
+    d.grammar_qa.push(g); saveData(d); return g;
+  },
+  async updateGrammar(id, updates) {
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('grammar_qa').update(updates).eq('id', id).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const d = loadData();
+    const g = d.grammar_qa.find(g => g.id === id);
+    if (!g) throw new Error('항목을 찾을 수 없습니다');
+    Object.assign(g, updates); saveData(d); return g;
+  },
+  async deleteGrammar(id) {
+    if (USE_SUPABASE) {
+      const { error } = await supabase.from('grammar_qa').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const d = loadData();
+    d.grammar_qa = d.grammar_qa.filter(g => g.id !== id);
+    saveData(d);
+  },
+};
+
+// ── Express 설정 ───────────────────────────────────────────────────
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'word-gacha-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 * 8 }
+}));
+
+// ── 프린트 디렉터리 ────────────────────────────────────────────────
+const PRINT_DIR = path.join(__dirname, 'print');
+const PRINT_TMP = path.join(PRINT_DIR, 'tmp');
+if (!fs.existsSync(PRINT_TMP)) fs.mkdirSync(PRINT_TMP, { recursive: true });
+
+// ── 관리자 인증 미들웨어 ───────────────────────────────────────────
+function requireAdmin(req, res, next) {
+  if (req.session && req.session.isAdmin) return next();
+  return res.status(401).json({ error: '관리자 로그인이 필요합니다' });
+}
+
+// ── 에러 래퍼 ─────────────────────────────────────────────────────
+function handle(fn) {
+  return async (req, res) => {
+    try { await fn(req, res); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  };
+}
+
+// ============================================================
+// 인증 API
+// ============================================================
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: '비밀번호를 입력하세요' });
+  if (password !== (process.env.ADMIN_PASSWORD || 'admin1234')) {
+    return res.status(401).json({ error: '비밀번호가 틀렸습니다' });
+  }
+  req.session.isAdmin = true;
+  res.json({ success: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
+});
+
+app.get('/api/auth/check', (req, res) => {
+  res.json({ isAdmin: !!(req.session && req.session.isAdmin) });
+});
+
+// ============================================================
+// 학생 API
+// ============================================================
+app.get('/api/students', handle(async (req, res) => {
+  res.json(await DB.getStudents());
+}));
+
+app.get('/api/students/:id', handle(async (req, res) => {
+  res.json(await DB.getStudent(req.params.id));
+}));
+
+app.post('/api/students', requireAdmin, handle(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력하세요' });
+  res.json(await DB.addStudent(name.trim()));
+}));
+
+app.patch('/api/students/:id', requireAdmin, handle(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력하세요' });
+  res.json(await DB.updateStudent(req.params.id, name.trim()));
+}));
+
+app.delete('/api/students/:id', requireAdmin, handle(async (req, res) => {
+  await DB.deleteStudent(req.params.id);
+  res.json({ success: true });
+}));
+
+// ============================================================
+// 단어 API
+// ============================================================
+app.get('/api/students/:id/words', handle(async (req, res) => {
+  res.json(await DB.getWordsByStudent(req.params.id));
+}));
+
+app.get('/api/words', requireAdmin, handle(async (req, res) => {
+  res.json(await DB.getAllWords(req.query.status || ''));
+}));
+
+app.post('/api/students/:id/words', handle(async (req, res) => {
+  const { english, korean, blank_type, added_by } = req.body;
+  if (!english || !english.trim()) return res.status(400).json({ error: '영어 단어를 입력하세요' });
+  if (!korean  || !korean.trim())  return res.status(400).json({ error: '한국어 뜻을 입력하세요' });
+  const isAdmin = req.session && req.session.isAdmin;
+  res.json(await DB.addWord(req.params.id, {
+    english:    english.trim(),
+    korean:     korean.trim(),
+    blank_type: blank_type || 'korean',
+    status:     isAdmin ? 'approved' : 'pending',
+    added_by:   added_by || (isAdmin ? 'teacher' : 'student'),
+  }));
+}));
+
+app.patch('/api/words/:id', requireAdmin, handle(async (req, res) => {
+  const allowed = ['english', 'korean', 'blank_type', 'status', 'box'];
+  const updates = {};
+  allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+  res.json(await DB.updateWord(req.params.id, updates));
+}));
+
+app.post('/api/words/:id/review', requireAdmin, handle(async (req, res) => {
+  res.json(await DB.reviewWord(req.params.id, !!req.body.correct));
+}));
+
+app.delete('/api/words/:id', requireAdmin, handle(async (req, res) => {
+  await DB.deleteWord(req.params.id);
+  res.json({ success: true });
+}));
+
+// ============================================================
+// 문법 Q&A API
+// ============================================================
+app.get('/api/grammar', handle(async (req, res) => {
+  res.json(await DB.getGrammar());
+}));
+
+app.post('/api/grammar', requireAdmin, handle(async (req, res) => {
+  const { question, answer, include_in_print } = req.body;
+  if (!question || !question.trim()) return res.status(400).json({ error: '질문을 입력하세요' });
+  if (!answer   || !answer.trim())   return res.status(400).json({ error: '답변을 입력하세요' });
+  res.json(await DB.addGrammar({ question: question.trim(), answer: answer.trim(), include_in_print: include_in_print !== false }));
+}));
+
+app.patch('/api/grammar/:id', requireAdmin, handle(async (req, res) => {
+  const allowed = ['question', 'answer', 'include_in_print'];
+  const updates = {};
+  allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+  res.json(await DB.updateGrammar(req.params.id, updates));
+}));
+
+app.delete('/api/grammar/:id', requireAdmin, handle(async (req, res) => {
+  await DB.deleteGrammar(req.params.id);
+  res.json({ success: true });
+}));
+
+// ============================================================
+// 프린트 API
+// ============================================================
+function escapeTypst(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ');
+}
+
+function todayString() {
+  const d = new Date();
+  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}.`;
+}
+
+function selectWordsForPrint(words, maxCount = 20) {
+  const active = words.filter(w => w.box < 5);
+  const weighted = [];
+  active.forEach(w => {
+    const weight = [0, 5, 3, 2, 1][w.box] || 1;
+    for (let i = 0; i < weight; i++) weighted.push(w);
+  });
+  for (let i = weighted.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [weighted[i], weighted[j]] = [weighted[j], weighted[i]];
+  }
+  const seen = new Set(), result = [];
+  for (const w of weighted) {
+    if (!seen.has(w.id) && result.length < maxCount) { seen.add(w.id); result.push(w); }
+  }
+  return result;
+}
+
+async function buildPDF(templateFile, replacer) {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const typFile = path.join(PRINT_TMP, `${id}.typ`);
+  const pdfFile = path.join(PRINT_TMP, `${id}.pdf`);
+  try {
+    const template = fs.readFileSync(templateFile, 'utf8');
+    fs.writeFileSync(typFile, replacer(template), 'utf8');
+    await execFileAsync('typst', ['compile', '--root', __dirname, typFile, pdfFile]);
+    return fs.readFileSync(pdfFile);
+  } finally {
+    fs.unlink(typFile, () => {});
+    fs.unlink(pdfFile, () => {});
+  }
+}
+
+function injectWordSheet(template, studentName, words, grammarList) {
+  const wordLines = words.map(w => {
+    const showEn = w.blank_type === 'english' || w.blank_type === 'both';
+    const showKo = w.blank_type === 'korean'  || w.blank_type === 'both';
+    return `  ("${escapeTypst(w.english)}", "${escapeTypst(w.korean)}", "${showEn ? 'blank' : 'show'}", "${showKo ? 'blank' : 'show'}"),`;
+  }).join('\n');
+
+  const grammarLines = grammarList.map(g =>
+    `  ("${escapeTypst(g.question)}", "${escapeTypst(g.answer)}"),`
+  ).join('\n');
+
+  return template
+    .replace(/student\s*=\s*"[^"]*"/, `student = "${escapeTypst(studentName)}"`)
+    .replace(/rdate\s*=\s*"[^"]*"/,   `rdate   = "${todayString()}"`)
+    .replace(/\/\/ ─── AUTO_WORDS_START[\s\S]*?\/\/ ─── AUTO_WORDS_END/,
+      `// ─── AUTO_WORDS_START\n${wordLines}\n// ─── AUTO_WORDS_END`)
+    .replace(/\/\/ ─── AUTO_GRAMMAR_START[\s\S]*?\/\/ ─── AUTO_GRAMMAR_END/,
+      `// ─── AUTO_GRAMMAR_START\n${grammarLines}\n// ─── AUTO_GRAMMAR_END`);
+}
+
+app.post('/api/print/word-sheet', requireAdmin, handle(async (req, res) => {
+  const { studentId, includeGrammar = true } = req.body;
+  const student = await DB.getStudent(studentId);
+  const allWords = await DB.getWordsByStudent(studentId);
+  const approved = allWords.filter(w => w.status === 'approved');
+  if (!approved.length) return res.status(400).json({ error: '승인된 단어가 없습니다' });
+
+  const words = selectWordsForPrint(approved, 20);
+  const grammarList = includeGrammar
+    ? (await DB.getGrammar()).filter(g => g.include_in_print)
+    : [];
+
+  const buf = await buildPDF(
+    path.join(PRINT_DIR, 'word-sheet.typ'),
+    t => injectWordSheet(t, student.name, words, grammarList)
+  );
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition',
+    `attachment; filename*=UTF-8''${date}_${encodeURIComponent(student.name)}-words.pdf`);
+  res.send(buf);
+}));
+
+app.post('/api/print/bulk', requireAdmin, handle(async (req, res) => {
+  const { studentIds, includeGrammar = true } = req.body;
+  if (!studentIds || !studentIds.length) return res.status(400).json({ error: '학생을 선택하세요' });
+
+  const grammarList = includeGrammar
+    ? (await DB.getGrammar()).filter(g => g.include_in_print)
+    : [];
+
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent('단어프린트')}-${date}.zip`);
+
+  const zip = archiver('zip', { zlib: { level: 6 } });
+  zip.pipe(res);
+
+  for (const sid of studentIds) {
+    try {
+      const student  = await DB.getStudent(sid);
+      const allWords = await DB.getWordsByStudent(sid);
+      const approved = allWords.filter(w => w.status === 'approved');
+      if (!approved.length) continue;
+      const words = selectWordsForPrint(approved, 20);
+      const buf = await buildPDF(
+        path.join(PRINT_DIR, 'word-sheet.typ'),
+        t => injectWordSheet(t, student.name, words, grammarList)
+      );
+      zip.append(buf, { name: `${student.name}-words.pdf` });
+    } catch (e) { console.error(`PDF 실패:`, e.message); }
+  }
+  zip.finalize();
+}));
+
+// ============================================================
+const PORT = process.env.PORT || 3002;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`📖 단어 가챠 서버: http://localhost:${PORT}`);
+});

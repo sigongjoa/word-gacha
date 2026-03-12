@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>선생님 관리 — Word Gacha</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; min-height: 100vh; }
+
+  /* 헤더 */
+  header { background: #2d3748; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.15rem; font-weight: 700; }
+  .logout-btn { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: .85rem; }
+  .logout-btn:hover { background: rgba(255,255,255,.25); }
+
+  /* 탭 */
+  .tabs { display: flex; background: #fff; border-bottom: 2px solid #e2e8f0; }
+  .tab { padding: 14px 24px; cursor: pointer; font-size: .9rem; font-weight: 600; color: #718096; border-bottom: 3px solid transparent; transition: all .18s; }
+  .tab.active { color: #667eea; border-bottom-color: #667eea; }
+  .tab:hover:not(.active) { color: #4a5568; }
+
+  /* 콘텐츠 */
+  .tab-content { display: none; padding: 20px; max-width: 900px; margin: 0 auto; }
+  .tab-content.active { display: block; }
+
+  /* 공통 카드 */
+  .card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .card h2 { font-size: 1rem; font-weight: 700; color: #2d3748; margin-bottom: 14px; }
+
+  /* 폼 요소 */
+  .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=text], input[type=password], select, textarea {
+    padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 9px;
+    font-size: .9rem; outline: none; transition: border-color .2s; font-family: inherit;
+  }
+  input[type=text]:focus, select:focus, textarea:focus { border-color: #667eea; }
+  textarea { resize: vertical; min-height: 60px; }
+  .flex1 { flex: 1; min-width: 120px; }
+
+  /* 버튼 */
+  .btn { padding: 9px 16px; border: none; border-radius: 9px; font-size: .85rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .btn-primary { background: #667eea; color: #fff; }
+  .btn-primary:hover { background: #5a67d8; }
+  .btn-sm { padding: 5px 10px; font-size: .78rem; }
+  .btn-danger  { background: #fed7d7; color: #c53030; }
+  .btn-danger:hover  { background: #feb2b2; }
+  .btn-success { background: #c6f6d5; color: #276749; }
+  .btn-success:hover { background: #9ae6b4; }
+  .btn-warn    { background: #fefcbf; color: #b7791f; }
+  .btn-warn:hover    { background: #faf089; }
+  .btn-outline { background: #fff; border: 1.5px solid #e2e8f0; color: #4a5568; }
+  .btn-outline:hover { border-color: #667eea; color: #667eea; }
+  .btn-pdf { background: #667eea; color: #fff; padding: 10px 20px; font-size: .9rem; }
+  .btn-pdf:hover { background: #5a67d8; }
+  .btn-zip { background: #2d3748; color: #fff; padding: 10px 20px; font-size: .9rem; }
+  .btn-zip:hover { background: #1a202c; }
+
+  /* 필터 바 */
+  .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-bar label { font-size: .85rem; font-weight: 600; color: #4a5568; }
+
+  /* 테이블 */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+  th { background: #f7fafc; padding: 10px 12px; text-align: left; font-weight: 700; color: #4a5568; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+  tr:hover td { background: #f7fafc; }
+  .badge { font-size: .72rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+  .badge.pending  { background: #fefcbf; color: #b7791f; }
+  .badge.approved { background: #c6f6d5; color: #276749; }
+  .blank-badge { font-size: .72rem; padding: 3px 8px; border-radius: 20px; background: #bee3f8; color: #2b6cb0; font-weight: 600; }
+  .box-badge { font-size: .72rem; padding: 3px 8px; border-radius: 20px; font-weight: 700; }
+  .box1 { background: #fed7d7; color: #c53030; }
+  .box2 { background: #feebc8; color: #c05621; }
+  .box3 { background: #fefcbf; color: #b7791f; }
+  .box4 { background: #c6f6d5; color: #276749; }
+  .box5 { background: #e2e8f0; color: #718096; }
+
+  /* 편집 인라인 */
+  .edit-input { padding: 5px 8px; border: 1.5px solid #667eea; border-radius: 7px; font-size: .85rem; width: 100%; min-width: 80px; }
+
+  /* 문법 Q&A */
+  .qa-item { background: #f7fafc; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start; }
+  .qa-body { flex: 1; }
+  .qa-q { font-weight: 700; color: #2d3748; margin-bottom: 4px; }
+  .qa-a { color: #718096; font-size: .88rem; }
+  .qa-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* 프린트 탭 */
+  .student-check-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+  .student-check { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #f7fafc; border-radius: 9px; cursor: pointer; border: 1.5px solid #e2e8f0; transition: border-color .15s; }
+  .student-check:hover { border-color: #667eea; }
+  .student-check input { cursor: pointer; }
+  .print-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .grammar-check-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; max-height: 200px; overflow-y: auto; }
+  .grammar-check { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: #f7fafc; border-radius: 8px; font-size: .85rem; cursor: pointer; }
+  .grammar-check input { cursor: pointer; }
+
+  /* 학생 관리 */
+  .student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .student-card { background: #f7fafc; border-radius: 11px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; border: 1.5px solid #e2e8f0; }
+  .student-name { font-weight: 700; color: #2d3748; font-size: .95rem; }
+  .student-actions { display: flex; gap: 6px; }
+
+  /* 메시지 */
+  .flash { padding: 10px 14px; border-radius: 9px; font-size: .85rem; margin-bottom: 10px; display: none; }
+  .flash.ok  { background: #c6f6d5; color: #276749; }
+  .flash.err { background: #fed7d7; color: #c53030; }
+
+  .empty { text-align: center; color: #a0aec0; padding: 32px 0; font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📖 Word Gacha — 선생님</h1>
+  <button class="logout-btn" id="logoutBtn">로그아웃</button>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="words">📝 단어 관리</div>
+  <div class="tab" data-tab="grammar">📚 문법 Q&amp;A</div>
+  <div class="tab" data-tab="print">🖨️ 프린트</div>
+  <div class="tab" data-tab="students">👤 학생 관리</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 1: 단어 관리
+═══════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-words">
+  <div class="card">
+    <h2>단어 직접 추가 (선생님)</h2>
+    <div class="row">
+      <select id="addWordStudent" class="flex1">
+        <option value="">학생 선택</option>
+      </select>
+      <input type="text" id="addWordEn" placeholder="영어 단어" class="flex1">
+      <input type="text" id="addWordKo" placeholder="한국어 뜻" class="flex1">
+      <select id="addWordBlank">
+        <option value="korean">한글 빈칸</option>
+        <option value="english">영어 빈칸</option>
+        <option value="both">둘 다 빈칸</option>
+      </select>
+      <button class="btn btn-primary" id="addWordBtn">추가</button>
+    </div>
+    <div class="flash" id="addWordMsg"></div>
+  </div>
+
+  <div class="filter-bar">
+    <label>학생:</label>
+    <select id="filterStudent"><option value="">전체</option></select>
+    <label>상태:</label>
+    <select id="filterStatus">
+      <option value="">전체</option>
+      <option value="pending">대기중</option>
+      <option value="approved">승인됨</option>
+    </select>
+    <button class="btn btn-outline btn-sm" id="refreshWords">새로고침</button>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="wordTable">
+        <thead>
+          <tr>
+            <th>학생</th><th>영어</th><th>한국어</th><th>빈칸</th>
+            <th>상태</th><th>박스</th><th>틀린 수</th><th>작업</th>
+          </tr>
+        </thead>
+        <tbody id="wordTbody"><tr><td colspan="8" class="empty">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 2: 문법 Q&A
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-grammar">
+  <div class="card">
+    <h2>문법 Q&amp;A 추가</h2>
+    <div class="row">
+      <input type="text" id="grammarQ" placeholder="질문 (예: 현재완료 부정문 형태는?)" class="flex1">
+    </div>
+    <div class="row">
+      <input type="text" id="grammarA" placeholder="답변 (예: have/has + not + 과거분사)" class="flex1">
+    </div>
+    <div class="row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;">
+        <input type="checkbox" id="grammarInclude" checked> 프린트에 포함
+      </label>
+      <button class="btn btn-primary" id="addGrammarBtn">추가</button>
+    </div>
+    <div class="flash" id="grammarMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>문법 목록</h2>
+    <div id="grammarList"><div class="empty">등록된 문법 Q&A가 없습니다.</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 3: 프린트
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-print">
+  <div class="card">
+    <h2>학생 선택</h2>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm" id="selectAllStudents">전체 선택</button>
+      <button class="btn btn-outline btn-sm" id="deselectAllStudents">전체 해제</button>
+    </div>
+    <div class="student-check-list" id="printStudentList"></div>
+  </div>
+
+  <div class="card">
+    <h2>문법 Q&A 포함 여부</h2>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
+      <input type="checkbox" id="includeGrammarCheck" checked>
+      <span style="font-size:.9rem;">문법 Q&A를 프린트에 포함</span>
+    </label>
+    <div id="grammarPreviewList" class="grammar-check-list"></div>
+  </div>
+
+  <div class="flash" id="printMsg"></div>
+  <div class="print-actions">
+    <button class="btn btn-pdf" id="printSingleBtn">📄 개별 PDF</button>
+    <button class="btn btn-zip" id="printBulkBtn">📦 ZIP 일괄 출력</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 4: 학생 관리
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-students">
+  <div class="card">
+    <h2>학생 추가</h2>
+    <div class="row">
+      <input type="text" id="newStudentName" placeholder="학생 이름" class="flex1">
+      <button class="btn btn-primary" id="addStudentBtn">추가</button>
+    </div>
+    <div class="flash" id="studentMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>학생 목록</h2>
+    <div class="student-grid" id="studentGrid"><div class="empty">불러오는 중...</div></div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+// ──── 로그인 체크 ────────────────────────────────────────────────
+(async () => {
+  const { isAdmin } = await API.checkAuth();
+  if (!isAdmin) window.location.href = 'login.html';
+})();
+
+document.getElementById('logoutBtn').onclick = async () => {
+  await API.logout(); window.location.href = 'login.html';
+};
+
+// ──── 탭 전환 ────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'words')    loadWords();
+    if (tab.dataset.tab === 'grammar')  loadGrammar();
+    if (tab.dataset.tab === 'print')    loadPrintTab();
+    if (tab.dataset.tab === 'students') loadStudents();
+  };
+});
+
+function flash(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.className = `flash ${type}`; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// 단어 관리
+// ══════════════════════════════════════════════════════════════
+let allStudents = [];
+let allWords    = [];
+
+async function loadWords() {
+  const studentSel  = document.getElementById('filterStudent').value;
+  const statusSel   = document.getElementById('filterStatus').value;
+
+  // 학생 목록 동기화
+  allStudents = await API.getStudents().catch(() => []);
+  populateStudentSelects();
+
+  // 전체 단어 불러오기
+  allWords = await API.getAllWords(statusSel || '').catch(() => []);
+
+  // 학생 필터
+  let words = studentSel ? allWords.filter(w => w.student_id === studentSel) : allWords;
+
+  const tbody = document.getElementById('wordTbody');
+  if (!words.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">단어가 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = words.map(w => {
+    const sName = w.students?.name || '?';
+    const blankLabel = { english: '영어 빈칸', korean: '한글 빈칸', both: '둘 다' }[w.blank_type] || w.blank_type;
+    return `
+    <tr data-id="${w.id}">
+      <td>${sName}</td>
+      <td><input class="edit-input" data-field="english"    value="${esc(w.english)}"   style="width:100px"></td>
+      <td><input class="edit-input" data-field="korean"     value="${esc(w.korean)}"    style="width:100px"></td>
+      <td>
+        <select class="edit-input" data-field="blank_type" style="width:90px">
+          <option value="korean"  ${w.blank_type==='korean' ?'selected':''}>한글 빈칸</option>
+          <option value="english" ${w.blank_type==='english'?'selected':''}>영어 빈칸</option>
+          <option value="both"    ${w.blank_type==='both'   ?'selected':''}>둘 다</option>
+        </select>
+      </td>
+      <td><span class="badge ${w.status}">${w.status==='pending'?'⏳ 대기중':'✅ 승인됨'}</span></td>
+      <td><span class="box-badge box${w.box}">Box ${w.box}</span></td>
+      <td>${w.wrong_count}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-success" onclick="saveWord('${w.id}', this)">저장</button>
+        ${w.status==='pending'
+          ? `<button class="btn btn-sm btn-outline" onclick="approveWord('${w.id}')">승인</button>`
+          : ''}
+        <button class="btn btn-sm btn-success" onclick="reviewWord('${w.id}', true)">⭕</button>
+        <button class="btn btn-sm btn-warn"    onclick="reviewWord('${w.id}', false)">❌</button>
+        <button class="btn btn-sm btn-danger"  onclick="deleteWord('${w.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function populateStudentSelects() {
+  ['filterStudent','addWordStudent'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = id === 'filterStudent'
+      ? '<option value="">전체</option>'
+      : '<option value="">학생 선택</option>';
+    allStudents.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id; opt.textContent = s.name;
+      if (s.id === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+async function saveWord(id, btn) {
+  const row = btn.closest('tr');
+  const updates = {};
+  row.querySelectorAll('[data-field]').forEach(el => {
+    updates[el.dataset.field] = el.value;
+  });
+  try {
+    await API.updateWord(id, { ...updates, status: 'approved' });
+    loadWords();
+  } catch(e) { alert(e.message); }
+}
+
+async function approveWord(id) {
+  try { await API.updateWord(id, { status: 'approved' }); loadWords(); }
+  catch(e) { alert(e.message); }
+}
+
+async function reviewWord(id, correct) {
+  try { await API.reviewWord(id, correct); loadWords(); }
+  catch(e) { alert(e.message); }
+}
+
+async function deleteWord(id) {
+  if (!confirm('삭제할까요?')) return;
+  try { await API.deleteWord(id); loadWords(); }
+  catch(e) { alert(e.message); }
+}
+
+document.getElementById('addWordBtn').onclick = async () => {
+  const sid   = document.getElementById('addWordStudent').value;
+  const en    = document.getElementById('addWordEn').value.trim();
+  const ko    = document.getElementById('addWordKo').value.trim();
+  const blank = document.getElementById('addWordBlank').value;
+  if (!sid) return flash('addWordMsg', '학생을 선택하세요', 'err');
+  if (!en || !ko) return flash('addWordMsg', '영어와 뜻을 입력하세요', 'err');
+  try {
+    await API.addWord(sid, { english: en, korean: ko, blank_type: blank, added_by: 'teacher' });
+    document.getElementById('addWordEn').value = '';
+    document.getElementById('addWordKo').value = '';
+    flash('addWordMsg', '추가됐습니다', 'ok');
+    loadWords();
+  } catch(e) { flash('addWordMsg', e.message, 'err'); }
+};
+
+document.getElementById('refreshWords').onclick = loadWords;
+document.getElementById('filterStudent').onchange = loadWords;
+document.getElementById('filterStatus').onchange  = loadWords;
+
+// ══════════════════════════════════════════════════════════════
+// 문법 Q&A
+// ══════════════════════════════════════════════════════════════
+async function loadGrammar() {
+  const list = await API.getGrammar().catch(() => []);
+  const el   = document.getElementById('grammarList');
+  if (!list.length) { el.innerHTML = '<div class="empty">등록된 문법 Q&A가 없습니다.</div>'; return; }
+  el.innerHTML = list.map(g => `
+    <div class="qa-item" data-id="${g.id}">
+      <div class="qa-body">
+        <div class="qa-q">Q. ${esc(g.question)}</div>
+        <div class="qa-a">A. ${esc(g.answer)}</div>
+        <div style="margin-top:4px;">
+          <span class="badge ${g.include_in_print ? 'approved' : 'pending'}">${g.include_in_print ? '프린트 포함' : '프린트 제외'}</span>
+        </div>
+      </div>
+      <div class="qa-actions">
+        <button class="btn btn-sm btn-outline" onclick="editGrammar('${g.id}', '${esc(g.question)}', '${esc(g.answer)}', ${g.include_in_print})">수정</button>
+        <button class="btn btn-sm ${g.include_in_print ? 'btn-warn' : 'btn-success'}" onclick="toggleGrammar('${g.id}', ${!g.include_in_print})">${g.include_in_print ? '제외' : '포함'}</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteGrammar('${g.id}')">삭제</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('addGrammarBtn').onclick = async () => {
+  const q = document.getElementById('grammarQ').value.trim();
+  const a = document.getElementById('grammarA').value.trim();
+  const inc = document.getElementById('grammarInclude').checked;
+  if (!q || !a) return flash('grammarMsg', '질문과 답변을 입력하세요', 'err');
+  try {
+    await API.addGrammar({ question: q, answer: a, include_in_print: inc });
+    document.getElementById('grammarQ').value = '';
+    document.getElementById('grammarA').value = '';
+    flash('grammarMsg', '추가됐습니다', 'ok');
+    loadGrammar();
+  } catch(e) { flash('grammarMsg', e.message, 'err'); }
+};
+
+function editGrammar(id, q, a, inc) {
+  const nq = prompt('질문 수정:', q.replace(/&quot;/g,'"'));
+  if (nq === null) return;
+  const na = prompt('답변 수정:', a.replace(/&quot;/g,'"'));
+  if (na === null) return;
+  API.updateGrammar(id, { question: nq, answer: na, include_in_print: inc })
+    .then(() => loadGrammar()).catch(e => alert(e.message));
+}
+
+async function toggleGrammar(id, val) {
+  try { await API.updateGrammar(id, { include_in_print: val }); loadGrammar(); }
+  catch(e) { alert(e.message); }
+}
+
+async function deleteGrammar(id) {
+  if (!confirm('삭제할까요?')) return;
+  try { await API.deleteGrammar(id); loadGrammar(); }
+  catch(e) { alert(e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 프린트 탭
+// ══════════════════════════════════════════════════════════════
+async function loadPrintTab() {
+  const [students, grammar] = await Promise.all([
+    API.getStudents().catch(() => []),
+    API.getGrammar().catch(() => []),
+  ]);
+
+  // 학생 체크박스
+  const slist = document.getElementById('printStudentList');
+  slist.innerHTML = students.map(s => `
+    <label class="student-check">
+      <input type="checkbox" value="${s.id}" class="print-student-cb"> ${s.name}
+    </label>
+  `).join('');
+
+  // 문법 미리보기
+  const glist = document.getElementById('grammarPreviewList');
+  glist.innerHTML = grammar.filter(g => g.include_in_print).map(g => `
+    <div class="grammar-check">
+      <span style="color:#4a5568;">Q. ${esc(g.question)}</span>
+    </div>
+  `).join('') || '<div style="color:#a0aec0;font-size:.85rem;">프린트 포함 문법 없음</div>';
+}
+
+document.getElementById('selectAllStudents').onclick   = () => document.querySelectorAll('.print-student-cb').forEach(cb => cb.checked = true);
+document.getElementById('deselectAllStudents').onclick = () => document.querySelectorAll('.print-student-cb').forEach(cb => cb.checked = false);
+
+function getSelectedStudentIds() {
+  return [...document.querySelectorAll('.print-student-cb:checked')].map(cb => cb.value);
+}
+
+document.getElementById('printSingleBtn').onclick = async () => {
+  const ids = getSelectedStudentIds();
+  const inc = document.getElementById('includeGrammarCheck').checked;
+  if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
+  if (ids.length > 1) return flash('printMsg', '개별 PDF는 학생 1명을 선택하세요 (여러 명은 ZIP 사용)', 'err');
+  flash('printMsg', 'PDF 생성 중...', 'ok');
+  try {
+    const blob = await API.printWordSheet(ids[0], inc);
+    downloadBlob(blob, `단어-${new Date().toISOString().slice(0,10)}.pdf`);
+    flash('printMsg', 'PDF 생성 완료!', 'ok');
+  } catch(e) { flash('printMsg', e.message, 'err'); }
+};
+
+document.getElementById('printBulkBtn').onclick = async () => {
+  const ids = getSelectedStudentIds();
+  const inc = document.getElementById('includeGrammarCheck').checked;
+  if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
+  flash('printMsg', 'ZIP 생성 중...', 'ok');
+  try {
+    const blob = await API.printBulk(ids, inc);
+    downloadBlob(blob, `단어프린트-${new Date().toISOString().slice(0,10)}.zip`);
+    flash('printMsg', 'ZIP 생성 완료!', 'ok');
+  } catch(e) { flash('printMsg', e.message, 'err'); }
+};
+
+// ══════════════════════════════════════════════════════════════
+// 학생 관리
+// ══════════════════════════════════════════════════════════════
+async function loadStudents() {
+  const students = await API.getStudents().catch(() => []);
+  const grid = document.getElementById('studentGrid');
+  if (!students.length) { grid.innerHTML = '<div class="empty">등록된 학생이 없습니다.</div>'; return; }
+  grid.innerHTML = students.map(s => `
+    <div class="student-card">
+      <div class="student-name">👤 ${esc(s.name)}</div>
+      <div class="student-actions">
+        <button class="btn btn-sm btn-outline" onclick="renameStudent('${s.id}', '${esc(s.name)}')">수정</button>
+        <button class="btn btn-sm btn-danger"  onclick="deleteStudent('${s.id}')">삭제</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('addStudentBtn').onclick = async () => {
+  const name = document.getElementById('newStudentName').value.trim();
+  if (!name) return flash('studentMsg', '이름을 입력하세요', 'err');
+  try {
+    await API.addStudent(name);
+    document.getElementById('newStudentName').value = '';
+    flash('studentMsg', '추가됐습니다', 'ok');
+    loadStudents();
+  } catch(e) { flash('studentMsg', e.message, 'err'); }
+};
+
+function renameStudent(id, name) {
+  const n = prompt('새 이름:', name.replace(/&quot;/g,'"'));
+  if (!n || !n.trim()) return;
+  API.updateStudent(id, n.trim()).then(() => loadStudents()).catch(e => alert(e.message));
+}
+
+async function deleteStudent(id) {
+  if (!confirm('학생과 모든 단어가 삭제됩니다. 계속할까요?')) return;
+  try { await API.deleteStudent(id); loadStudents(); }
+  catch(e) { alert(e.message); }
+}
+
+// ──── 초기 로드 ──────────────────────────────────────────────
+loadWords();
+</script>
+</body>
+</html>

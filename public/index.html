@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Gacha</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 24px 16px; }
+  header { text-align: center; padding: 32px 0 24px; }
+  header h1 { font-size: 2rem; font-weight: 800; color: #1a202c; }
+  header p  { color: #718096; margin-top: 8px; font-size: .95rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; max-width: 680px; margin: 0 auto; }
+  .student-btn {
+    background: #fff; border: 2px solid #e2e8f0; border-radius: 14px;
+    padding: 22px 12px; text-align: center; cursor: pointer;
+    transition: all .18s; font-size: 1rem; font-weight: 600; color: #2d3748;
+  }
+  .student-btn:hover { border-color: #667eea; background: #ebf4ff; transform: translateY(-2px); box-shadow: 0 4px 14px rgba(102,126,234,.18); }
+  .student-btn .avatar { font-size: 2rem; margin-bottom: 8px; }
+  .admin-link { display: block; text-align: center; margin-top: 36px; color: #a0aec0; font-size: .85rem; text-decoration: none; }
+  .admin-link:hover { color: #667eea; }
+  .empty { text-align: center; color: #a0aec0; padding: 48px 0; }
+  #loading { text-align: center; padding: 48px 0; color: #a0aec0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📖 Word Gacha</h1>
+  <p>이름을 선택해서 단어를 입력하세요</p>
+</header>
+
+<div id="loading">불러오는 중...</div>
+<div class="grid" id="grid" style="display:none"></div>
+<p class="empty" id="empty" style="display:none">등록된 학생이 없습니다.<br>선생님에게 문의하세요.</p>
+<a href="login.html" class="admin-link">선생님 로그인 →</a>
+
+<script>
+  const avatars = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'];
+
+  async function load() {
+    try {
+      const students = await fetch('/api/students').then(r => r.json());
+      document.getElementById('loading').style.display = 'none';
+      if (!students.length) { document.getElementById('empty').style.display = 'block'; return; }
+      const grid = document.getElementById('grid');
+      grid.style.display = 'grid';
+      students.forEach((s, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'student-btn';
+        btn.innerHTML = `<div class="avatar">${avatars[i % avatars.length]}</div>${s.name}`;
+        btn.onclick = () => {
+          sessionStorage.setItem('studentId',   s.id);
+          sessionStorage.setItem('studentName', s.name);
+          window.location.href = 'student.html';
+        };
+        grid.appendChild(btn);
+      });
+    } catch {
+      document.getElementById('loading').textContent = '서버에 연결할 수 없습니다.';
+    }
+  }
+  load();
+</script>
+</body>
+</html>

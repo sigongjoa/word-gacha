@@ -1,0 +1,5 @@
+node_modules/
+.env
+print/tmp/
+*.pdf
+*.zip

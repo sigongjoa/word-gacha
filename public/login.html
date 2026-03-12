@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>선생님 로그인 — Word Gacha</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { background: #fff; border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+  h1 { font-size: 1.5rem; font-weight: 700; color: #1a202c; margin-bottom: 8px; }
+  p  { color: #718096; font-size: .9rem; margin-bottom: 28px; }
+  label { display: block; font-size: .85rem; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+  input { width: 100%; padding: 12px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 1rem; outline: none; transition: border-color .2s; }
+  input:focus { border-color: #667eea; }
+  button { width: 100%; padding: 13px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 18px; transition: background .2s; }
+  button:hover { background: #5a67d8; }
+  .err { color: #e53e3e; font-size: .85rem; margin-top: 10px; display: none; }
+  .back { display: block; text-align: center; margin-top: 18px; color: #667eea; font-size: .85rem; text-decoration: none; }
+  .back:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📖 선생님 로그인</h1>
+  <p>Word Gacha 관리자 페이지입니다</p>
+  <label for="pw">비밀번호</label>
+  <input type="password" id="pw" placeholder="비밀번호 입력" autocomplete="current-password">
+  <button id="loginBtn">로그인</button>
+  <div class="err" id="err">비밀번호가 틀렸습니다.</div>
+  <a href="index.html" class="back">← 학생 화면으로</a>
+</div>
+<script>
+  async function doLogin() {
+    const pw = document.getElementById('pw').value;
+    const err = document.getElementById('err');
+    err.style.display = 'none';
+    try {
+      const res = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pw }) });
+      if (res.ok) { window.location.href = 'admin.html'; }
+      else { err.style.display = 'block'; }
+    } catch { err.style.display = 'block'; }
+  }
+  document.getElementById('loginBtn').onclick = doLogin;
+  document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
