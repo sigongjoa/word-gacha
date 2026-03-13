@@ -509,9 +509,11 @@ app.post('/api/print/word-sheet', requireAdmin, handle(async (req, res) => {
 
   const words = selectWordsForPrint(approved, 20);
   const allGrammar = await DB.getGrammar();
-  const grammarList = Array.isArray(grammarIds) && grammarIds.length > 0
+  const baseList = Array.isArray(grammarIds) && grammarIds.length > 0
     ? allGrammar.filter(g => grammarIds.includes(g.id) && g.status === 'answered')
     : allGrammar.filter(g => g.include_in_print);
+  // 선생님 Q&A + 해당 학생 본인 질문만
+  const grammarList = baseList.filter(g => !g.student_id || g.student_id === studentId);
 
   const buf = await buildPDF(
     path.join(PRINT_DIR, 'word-sheet.typ'),
@@ -529,7 +531,7 @@ app.post('/api/print/bulk', requireAdmin, handle(async (req, res) => {
   if (!studentIds || !studentIds.length) return res.status(400).json({ error: '학생을 선택하세요' });
 
   const allGrammar = await DB.getGrammar();
-  const grammarList = Array.isArray(grammarIds) && grammarIds.length > 0
+  const baseGrammar = Array.isArray(grammarIds) && grammarIds.length > 0
     ? allGrammar.filter(g => grammarIds.includes(g.id) && g.status === 'answered')
     : allGrammar.filter(g => g.include_in_print);
 
@@ -547,6 +549,8 @@ app.post('/api/print/bulk', requireAdmin, handle(async (req, res) => {
       const approved = allWords.filter(w => w.status === 'approved');
       if (!approved.length) continue;
       const words = selectWordsForPrint(approved, 20);
+      // 학생별: 선생님 Q&A + 본인 질문만
+      const grammarList = baseGrammar.filter(g => !g.student_id || g.student_id === sid);
       const buf = await buildPDF(
         path.join(PRINT_DIR, 'word-sheet.typ'),
         t => injectWordSheet(t, student.name, words, grammarList)

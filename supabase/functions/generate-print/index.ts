@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   const { studentIds, grammarIds } = await req.json()
   if (!studentIds?.length) return json({ error: '학생을 선택하세요' }, 400)
 
-  // 오답 풀: 다른 학생들의 승인된 단어
+  // 오답 풀: 모든 승인된 단어
   const { data: allWords } = await supabase
     .from('words')
     .select('english, student_id')
@@ -105,25 +105,28 @@ Deno.serve(async (req) => {
     [...new Set((allWords ?? []).map((w) => w.english).filter(Boolean))]
   )
 
-  // 문법 문제 생성 (모든 학생 공통 — 1회만 Gemini 호출)
-  let sharedPart3: unknown[] = []
-  const includeGrammar = Array.isArray(grammarIds) ? grammarIds.length > 0 : true
-  if (includeGrammar) {
-    let grammarQuery = supabase.from('grammar_qa').select('*').eq('status', 'answered')
+  // 문법 전체 로드 (학생별 필터링에 사용)
+  let allGrammar: Record<string, unknown>[] = []
+  const hasGrammarIds = Array.isArray(grammarIds) && grammarIds.length > 0
+  if (hasGrammarIds) {
+    const { data } = await supabase
+      .from('grammar_qa').select('*').eq('status', 'answered').in('id', grammarIds)
+    allGrammar = data ?? []
+  } else {
+    const { data } = await supabase
+      .from('grammar_qa').select('*').eq('status', 'answered').eq('include_in_print', true)
+    allGrammar = data ?? []
+  }
 
-    if (Array.isArray(grammarIds) && grammarIds.length > 0) {
-      // 선택된 ID만 사용
-      grammarQuery = grammarQuery.in('id', grammarIds)
-    } else {
-      // 기존 방식: include_in_print = true
-      grammarQuery = grammarQuery.eq('include_in_print', true)
-    }
-
-    const { data: grammarList } = await grammarQuery.order('created_at')
-
-    if (grammarList?.length) {
-      const selected = shuffle(grammarList).slice(0, 5)
-      const grammarPrompt = `너는 수능 영어 교사야. 다음 문법 개념들로 빈칸 4지선다 문제를 만들어줘.
+  // 학생별 Part 3용 문법 생성 헬퍼
+  async function buildPart3(studentId: string): Promise<unknown[]> {
+    // 선생님 Q&A(student_id null) + 해당 학생 본인 질문만
+    const forStudent = allGrammar.filter(
+      (g) => !g.student_id || g.student_id === studentId
+    )
+    if (!forStudent.length) return []
+    const selected = shuffle(forStudent).slice(0, 5)
+    const prompt = `너는 수능 영어 교사야. 다음 문법 개념들로 빈칸 4지선다 문제를 만들어줘.
 
 규칙:
 - 자연스러운 영어 문장에 빈칸(_____) 포함
@@ -137,10 +140,8 @@ ${selected.map((g, i) => `${i + 1}. Q: ${g.question} / A: ${g.answer}`).join('\n
 [{"sentence":"...","answer":"...","options":["답1","답2","답3","답4"],"grammar_point":"문법개념명"}]
 
 options는 answer를 포함한 4개를 랜덤 순서로.`
-
-      const res = await callGemini(grammarPrompt, GEMINI_KEY)
-      sharedPart3 = parseJSON(res) ?? []
-    }
+    const res = await callGemini(prompt, GEMINI_KEY)
+    return parseJSON(res) ?? []
   }
 
   // 학생별 처리
@@ -212,11 +213,14 @@ options는 answer + distractors 4개를 랜덤 순서로.`
       part2 = parseJSON(res) ?? []
     }
 
+    // Part 3: 학생별 개인화 문법 문제 (본인 질문 + 선생님 Q&A)
+    const part3 = await buildPart3(studentId)
+
     jobs.push({
       studentName: student.name,
       part1,
       part2,
-      part3: sharedPart3,
+      part3,
     })
   }
 
