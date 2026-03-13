@@ -113,6 +113,17 @@
   .student-name { font-weight: 700; color: #2d3748; font-size: .95rem; }
   .student-actions { display: flex; gap: 6px; }
 
+  /* 오답 현황 */
+  .wrong-student-block { margin-bottom: 20px; }
+  .wrong-student-name { font-size: .9rem; font-weight: 700; color: #2d3748; padding: 8px 12px;
+    background: #f7fafc; border-radius: 9px; margin-bottom: 8px; border-left: 4px solid #fc8181; }
+  .wrong-word-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: #fff; border-radius: 9px; margin-bottom: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.05); flex-wrap: wrap; }
+  .wrong-count-badge { font-size: .8rem; font-weight: 700; padding: 4px 10px; border-radius: 20px;
+    background: #fed7d7; color: #c53030; white-space: nowrap; }
+  .wrong-en { font-weight: 700; color: #2d3748; flex: 1; min-width: 80px; }
+  .wrong-ko { color: #718096; font-size: .88rem; flex: 1; min-width: 80px; }
+
   /* 메시지 */
   .flash { padding: 10px 14px; border-radius: 9px; font-size: .85rem; margin-bottom: 10px; display: none; }
   .flash.ok  { background: #c6f6d5; color: #276749; }
@@ -140,6 +151,7 @@
 <div class="tabs">
   <div class="tab active" data-tab="words">📝 단어 관리</div>
   <div class="tab" data-tab="student-questions">📬 학생 질문</div>
+  <div class="tab" data-tab="wrong">❌ 오답 현황</div>
   <div class="tab" data-tab="grammar">📚 문법 Q&amp;A</div>
   <div class="tab" data-tab="print">🖨️ 프린트</div>
   <div class="tab" data-tab="students">👤 학생 관리</div>
@@ -210,6 +222,24 @@
       <button class="btn btn-outline btn-sm" id="refreshSQ">새로고침</button>
     </div>
     <div id="studentQuestionList"><div class="empty">불러오는 중...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB: 오답 현황
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-wrong">
+  <div class="card">
+    <h2>❌ 학생별 오답 현황</h2>
+    <div class="filter-bar">
+      <label>정렬:</label>
+      <select id="wrongSort">
+        <option value="count">틀린 횟수순</option>
+        <option value="student">학생별</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="refreshWrong">새로고침</button>
+    </div>
+    <div id="wrongList"><div class="empty">불러오는 중...</div></div>
   </div>
 </div>
 
@@ -327,6 +357,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'words')             loadWords();
     if (tab.dataset.tab === 'student-questions') loadStudentQuestions();
+    if (tab.dataset.tab === 'wrong')             loadWrongWords();
     if (tab.dataset.tab === 'grammar')           loadGrammar();
     if (tab.dataset.tab === 'print')             loadPrintTab();
     if (tab.dataset.tab === 'students')          loadStudents();
@@ -472,6 +503,9 @@ async function loadStudentQuestions() {
   let list = all.filter(g => g.student_id);
   if (statusFilter) list = list.filter(g => g.status === statusFilter);
 
+  // 최신순 정렬
+  list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
   const el = document.getElementById('studentQuestionList');
   if (!list.length) {
     el.innerHTML = '<div class="empty">학생 질문이 없습니다.</div>';
@@ -558,6 +592,71 @@ async function deleteSQ(id) {
 
 document.getElementById('filterSQStatus').onchange = loadStudentQuestions;
 document.getElementById('refreshSQ').onclick = loadStudentQuestions;
+
+// ══════════════════════════════════════════════════════════════
+// 오답 현황
+// ══════════════════════════════════════════════════════════════
+async function loadWrongWords() {
+  const sort = document.getElementById('wrongSort').value;
+  const words = await API.getAllWords('').catch(() => []);
+
+  // 틀린 적 있는 단어만
+  const wrong = words.filter(w => w.wrong_count > 0);
+  const el = document.getElementById('wrongList');
+
+  if (!wrong.length) {
+    el.innerHTML = '<div class="empty">아직 틀린 단어가 없습니다 🎉</div>';
+    return;
+  }
+
+  if (sort === 'count') {
+    // 틀린 횟수 많은 순
+    wrong.sort((a, b) => b.wrong_count - a.wrong_count);
+    el.innerHTML = wrong.map(w => {
+      const sName = w.students?.name || '?';
+      return `
+        <div class="wrong-word-row">
+          <span class="wrong-count-badge">❌ ${w.wrong_count}회</span>
+          <span class="wrong-en">${esc(w.english)}</span>
+          <span class="wrong-ko">${esc(w.korean)}</span>
+          <span class="badge student-q" style="font-size:.72rem;">${esc(sName)}</span>
+          <span class="box-badge box${w.box}" style="font-size:.72rem;padding:3px 8px;">Box ${w.box}</span>
+        </div>`;
+    }).join('');
+  } else {
+    // 학생별 그룹
+    const byStudent = {};
+    wrong.forEach(w => {
+      const name = w.students?.name || '?';
+      if (!byStudent[name]) byStudent[name] = [];
+      byStudent[name].push(w);
+    });
+    // 학생별로 틀린 수 합계 내림차순 정렬
+    const sorted = Object.entries(byStudent).sort((a, b) => {
+      const sumA = a[1].reduce((s, w) => s + w.wrong_count, 0);
+      const sumB = b[1].reduce((s, w) => s + w.wrong_count, 0);
+      return sumB - sumA;
+    });
+    el.innerHTML = sorted.map(([name, ws]) => {
+      const total = ws.reduce((s, w) => s + w.wrong_count, 0);
+      ws.sort((a, b) => b.wrong_count - a.wrong_count);
+      return `
+        <div class="wrong-student-block">
+          <div class="wrong-student-name">👤 ${esc(name)} — 총 ${total}회 틀림</div>
+          ${ws.map(w => `
+            <div class="wrong-word-row">
+              <span class="wrong-count-badge">❌ ${w.wrong_count}회</span>
+              <span class="wrong-en">${esc(w.english)}</span>
+              <span class="wrong-ko">${esc(w.korean)}</span>
+              <span class="box-badge box${w.box}" style="font-size:.72rem;padding:3px 8px;">Box ${w.box}</span>
+            </div>`).join('')}
+        </div>`;
+    }).join('');
+  }
+}
+
+document.getElementById('wrongSort').onchange = loadWrongWords;
+document.getElementById('refreshWrong').onclick = loadWrongWords;
 
 // ══════════════════════════════════════════════════════════════
 // 문법 Q&A
