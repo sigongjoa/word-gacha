@@ -72,7 +72,9 @@
 <div id="content"></div>
 
 <script>
-const data = JSON.parse(localStorage.getItem('printJob') || 'null')
+const data = JSON.parse(
+  localStorage.getItem('printJob') || sessionStorage.getItem('printJob') || 'null'
+)
 
 if (!data || !data.jobs?.length) {
   document.getElementById('content').innerHTML =
