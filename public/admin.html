@@ -124,6 +124,11 @@
   .wrong-en { font-weight: 700; color: #2d3748; flex: 1; min-width: 80px; }
   .wrong-ko { color: #718096; font-size: .88rem; flex: 1; min-width: 80px; }
 
+  /* 오답 현황 - box 드롭다운 */
+  .box-select { font-size: .72rem; padding: 3px 10px; border-radius: 20px; font-weight: 700;
+    border: none; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; }
+  .box-select:hover { opacity: .85; }
+
   /* 메시지 */
   .flash { padding: 10px 14px; border-radius: 9px; font-size: .85rem; margin-bottom: 10px; display: none; }
   .flash.ok  { background: #c6f6d5; color: #276749; }
@@ -621,7 +626,7 @@ async function loadWrongWords() {
           <span class="wrong-en">${esc(w.english)}</span>
           <span class="wrong-ko">${esc(w.korean)}</span>
           <span class="badge student-q" style="font-size:.72rem;">${esc(sName)}</span>
-          <span class="box-badge box${w.box}" style="font-size:.72rem;padding:3px 8px;">Box ${w.box}</span>
+          ${boxSelect(w)}
         </div>`;
     }).join('');
   } else {
@@ -649,7 +654,7 @@ async function loadWrongWords() {
               <span class="wrong-count-badge">❌ ${w.wrong_count}회</span>
               <span class="wrong-en">${esc(w.english)}</span>
               <span class="wrong-ko">${esc(w.korean)}</span>
-              <span class="box-badge box${w.box}" style="font-size:.72rem;padding:3px 8px;">Box ${w.box}</span>
+              ${boxSelect(w)}
             </div>`).join('')}
         </div>`;
     }).join('');
@@ -658,6 +663,32 @@ async function loadWrongWords() {
 
 document.getElementById('wrongSort').onchange = loadWrongWords;
 document.getElementById('refreshWrong').onclick = loadWrongWords;
+
+const BOX_STYLE = {
+  1: 'background:#fed7d7;color:#c53030',
+  2: 'background:#feebc8;color:#c05621',
+  3: 'background:#fefcbf;color:#b7791f',
+  4: 'background:#c6f6d5;color:#276749',
+};
+
+function boxSelect(w) {
+  const opts = [1,2,3,4].map(n =>
+    `<option value="${n}" ${w.box==n?'selected':''}>${n}단계</option>`
+  ).join('');
+  return `<select class="box-select" style="${BOX_STYLE[w.box]||''}"
+    onchange="changeBox(${w.id},this.value,this)">${opts}</select>`;
+}
+
+async function changeBox(id, box, el) {
+  const prev = el.value;
+  try {
+    await API.updateWord(id, { box: parseInt(box) });
+    el.style.cssText = BOX_STYLE[box] || '';
+  } catch {
+    el.value = prev;
+    showFlash('box 변경 실패', false);
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // 문법 Q&A
