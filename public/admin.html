@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>선생님 관리 — Word Gacha</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -288,6 +291,22 @@
 
 <script src="js/config.js?v=2"></script>
 <script src="js/api.js?v=2"></script>
+<script>
+// ── 버전 체크 & 자동 새로고침 ────────────────────────────────
+(async () => {
+  try {
+    const res  = await fetch('version.json?_=' + Date.now());
+    const { v } = await res.json();
+    const saved = localStorage.getItem('appVersion');
+    if (saved && saved !== v) {
+      localStorage.setItem('appVersion', v);
+      location.reload(true);
+      return;
+    }
+    localStorage.setItem('appVersion', v);
+  } catch {}
+})();
+</script>
 <script>
 // ──── 로그인 체크 ────────────────────────────────────────────────
 (async () => {
