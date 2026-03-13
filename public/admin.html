@@ -723,43 +723,61 @@ async function deleteGrammar(id) {
 // ══════════════════════════════════════════════════════════════
 // 프린트 탭
 // ══════════════════════════════════════════════════════════════
+let _allGrammar = [];
+
 async function loadPrintTab() {
   const [students, grammar] = await Promise.all([
     API.getStudents().catch(() => []),
     API.getGrammar().catch(() => []),
   ]);
+  _allGrammar = grammar;
 
-  // 학생 체크박스
+  // 학생 체크박스 — 선택 변경 시 문법 목록 동적 업데이트
   const slist = document.getElementById('printStudentList');
   slist.innerHTML = students.map(s => `
     <label class="student-check">
-      <input type="checkbox" value="${s.id}" class="print-student-cb"> ${s.name}
+      <input type="checkbox" value="${s.id}" data-name="${esc(s.name)}" class="print-student-cb"> ${s.name}
     </label>
   `).join('');
+  document.querySelectorAll('.print-student-cb').forEach(cb => {
+    cb.addEventListener('change', updateGrammarList);
+  });
 
-  // 문법 Q&A 개별 선택 체크박스 (선생님 Q&A + 답변된 학생 질문)
-  const answered = grammar.filter(g => g.status === 'answered' && g.answer);
+  updateGrammarList();
+}
+
+function updateGrammarList() {
+  const selectedIds = getSelectedStudentIds();
+  const answered = _allGrammar.filter(g => g.status === 'answered' && g.answer);
+
+  // 개별(1명): 해당 학생 본인 질문 + 선생님 Q&A만
+  // 일괄(복수): 전체 answered
+  const filtered = selectedIds.length === 1
+    ? answered.filter(g => !g.student_id || g.student_id === selectedIds[0])
+    : answered;
+
   const gcl = document.getElementById('grammarCheckList');
   const gem = document.getElementById('grammarEmptyMsg');
-  if (!answered.length) {
+
+  if (!filtered.length) {
     gcl.innerHTML = '';
     gem.style.display = 'block';
-  } else {
-    gem.style.display = 'none';
-    gcl.innerHTML = answered.map(g => {
-      const label = g.student_id
-        ? `📬 ${esc(g.student_name || '학생')} 질문`
-        : '📚 선생님 Q&A';
-      return `
-        <label class="grammar-check">
-          <input type="checkbox" value="${g.id}" class="print-grammar-cb" checked>
-          <span style="flex:1;">
-            <span style="font-size:.72rem;color:#718096;">${label}</span><br>
-            Q. ${esc(g.question)}
-          </span>
-        </label>`;
-    }).join('');
+    return;
   }
+  gem.style.display = 'none';
+  gcl.innerHTML = filtered.map(g => {
+    const label = g.student_id
+      ? `📬 ${esc(g.student_name || '학생')} 질문`
+      : '📚 선생님 Q&A';
+    return `
+      <label class="grammar-check">
+        <input type="checkbox" value="${g.id}" class="print-grammar-cb" checked>
+        <span style="flex:1;">
+          <span style="font-size:.72rem;color:#718096;">${label}</span><br>
+          Q. ${esc(g.question)}
+        </span>
+      </label>`;
+  }).join('');
 }
 
 document.getElementById('selectAllStudents').onclick   = () => document.querySelectorAll('.print-student-cb').forEach(cb => cb.checked = true);
