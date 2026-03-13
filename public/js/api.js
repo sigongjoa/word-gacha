@@ -1,71 +1,67 @@
 const API = {
+  _token() { return localStorage.getItem('adminToken') },
+
   async _fetch(path, options = {}) {
-    const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+    const token = this._token()
+    const res = await fetch(CONFIG.FUNCTIONS_URL + path, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
       ...options,
-    });
+    })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || '요청 실패');
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(err.error || '요청 실패')
     }
-    return res.json();
+    return res.json()
   },
 
   // 인증
-  async login(password)  { return this._fetch('/api/auth/login',  { method: 'POST', body: JSON.stringify({ password }) }); },
-  async logout()         { return this._fetch('/api/auth/logout', { method: 'POST' }); },
-  async checkAuth()      { return this._fetch('/api/auth/check'); },
+  async login(password) {
+    const data = await this._fetch('/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
+    if (data.token) localStorage.setItem('adminToken', data.token)
+    return data
+  },
+  async logout() {
+    localStorage.removeItem('adminToken')
+    return { success: true }
+  },
+  async checkAuth() {
+    return { isAdmin: !!this._token() }
+  },
 
   // 학생
-  async getStudents()           { return this._fetch('/api/students'); },
-  async getStudent(id)          { return this._fetch(`/api/students/${id}`); },
-  async addStudent(name)        { return this._fetch('/api/students', { method: 'POST', body: JSON.stringify({ name }) }); },
-  async updateStudent(id, name) { return this._fetch(`/api/students/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }); },
-  async deleteStudent(id)       { return this._fetch(`/api/students/${id}`, { method: 'DELETE' }); },
+  async getStudents()           { return this._fetch('/students') },
+  async getStudent(id)          { return this._fetch(`/students/${id}`) },
+  async addStudent(name)        { return this._fetch('/students', { method: 'POST', body: JSON.stringify({ name }) }) },
+  async updateStudent(id, name) { return this._fetch(`/students/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }) },
+  async deleteStudent(id)       { return this._fetch(`/students/${id}`, { method: 'DELETE' }) },
 
   // 단어 (학생)
-  async getMyWords(studentId)         { return this._fetch(`/api/students/${studentId}/words`); },
-  async addWord(studentId, wordData)  { return this._fetch(`/api/students/${studentId}/words`, { method: 'POST', body: JSON.stringify(wordData) }); },
+  async getMyWords(studentId)         { return this._fetch(`/words?student_id=${studentId}`) },
+  async addWord(studentId, wordData)  { return this._fetch('/words', { method: 'POST', body: JSON.stringify({ student_id: studentId, ...wordData }) }) },
 
   // 단어 (관리자)
-  async getAllWords(status)           { return this._fetch(`/api/words${status ? `?status=${status}` : ''}`); },
-  async updateWord(id, updates)       { return this._fetch(`/api/words/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }); },
-  async reviewWord(id, correct)       { return this._fetch(`/api/words/${id}/review`, { method: 'POST', body: JSON.stringify({ correct }) }); },
-  async deleteWord(id)                { return this._fetch(`/api/words/${id}`, { method: 'DELETE' }); },
+  async getAllWords(status)      { return this._fetch(`/words${status ? `?status=${status}` : ''}`) },
+  async updateWord(id, updates)  { return this._fetch(`/words/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }) },
+  async reviewWord(id, correct)  { return this._fetch(`/words/${id}/review`, { method: 'POST', body: JSON.stringify({ correct }) }) },
+  async deleteWord(id)           { return this._fetch(`/words/${id}`, { method: 'DELETE' }) },
 
   // 문법 Q&A
-  async getGrammar()              { return this._fetch('/api/grammar'); },
-  async addGrammar(data)          { return this._fetch('/api/grammar', { method: 'POST', body: JSON.stringify(data) }); },
-  async updateGrammar(id, data)   { return this._fetch(`/api/grammar/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); },
-  async deleteGrammar(id)         { return this._fetch(`/api/grammar/${id}`, { method: 'DELETE' }); },
-
-  // 프린트 (PDF blob 반환)
-  async printWordSheet(studentId, includeGrammar = true) {
-    const res = await fetch('/api/print/word-sheet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId, includeGrammar }),
-    });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'PDF 생성 실패'); }
-    return res.blob();
-  },
-  async printBulk(studentIds, includeGrammar = true) {
-    const res = await fetch('/api/print/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentIds, includeGrammar }),
-    });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'ZIP 생성 실패'); }
-    return res.blob();
-  },
-};
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  async getGrammar()            { return this._fetch('/grammar') },
+  async addGrammar(data)        { return this._fetch('/grammar', { method: 'POST', body: JSON.stringify(data) }) },
+  async updateGrammar(id, data) { return this._fetch(`/grammar/${id}`, { method: 'PATCH', body: JSON.stringify(data) }) },
+  async deleteGrammar(id)       { return this._fetch(`/grammar/${id}`, { method: 'DELETE' }) },
 }
 
-window.API = API;
-window.downloadBlob = downloadBlob;
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+window.API = API
+window.downloadBlob = downloadBlob

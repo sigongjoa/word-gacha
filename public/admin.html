@@ -249,6 +249,7 @@
   </div>
 </div>
 
+<script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script>
 // ──── 로그인 체크 ────────────────────────────────────────────────
@@ -496,16 +497,41 @@ function getSelectedStudentIds() {
   return [...document.querySelectorAll('.print-student-cb:checked')].map(cb => cb.value);
 }
 
+function selectWordsForPrint(words, max = 20) {
+  const weighted = [];
+  words.forEach(w => {
+    const weight = [0, 5, 3, 2, 1][w.box] || 1;
+    for (let i = 0; i < weight; i++) weighted.push(w);
+  });
+  for (let i = weighted.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [weighted[i], weighted[j]] = [weighted[j], weighted[i]];
+  }
+  const seen = new Set(), result = [];
+  for (const w of weighted) {
+    if (!seen.has(w.id) && result.length < max) { seen.add(w.id); result.push(w); }
+  }
+  return result;
+}
+
 document.getElementById('printSingleBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
   const inc = document.getElementById('includeGrammarCheck').checked;
   if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
-  if (ids.length > 1) return flash('printMsg', '개별 PDF는 학생 1명을 선택하세요 (여러 명은 ZIP 사용)', 'err');
-  flash('printMsg', 'PDF 생성 중...', 'ok');
+  if (ids.length > 1) return flash('printMsg', '개별 프린트는 학생 1명을 선택하세요 (여러 명은 일괄 출력 사용)', 'err');
+  flash('printMsg', '프린트 준비 중...', 'ok');
   try {
-    const blob = await API.printWordSheet(ids[0], inc);
-    downloadBlob(blob, `단어-${new Date().toISOString().slice(0,10)}.pdf`);
-    flash('printMsg', 'PDF 생성 완료!', 'ok');
+    const student = allStudents.find(s => s.id === ids[0]);
+    const words = await API.getMyWords(ids[0]);
+    const approved = words.filter(w => w.status === 'approved');
+    if (!approved.length) return flash('printMsg', '승인된 단어가 없습니다', 'err');
+    const grammar = inc ? (await API.getGrammar()).filter(g => g.include_in_print) : [];
+    sessionStorage.setItem('printJob', JSON.stringify({
+      jobs: [{ studentName: student.name, words: selectWordsForPrint(approved) }],
+      grammar,
+    }));
+    window.open('print.html', '_blank');
+    flash('printMsg', '프린트 창이 열렸습니다', 'ok');
   } catch(e) { flash('printMsg', e.message, 'err'); }
 };
 
@@ -513,11 +539,21 @@ document.getElementById('printBulkBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
   const inc = document.getElementById('includeGrammarCheck').checked;
   if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
-  flash('printMsg', 'ZIP 생성 중...', 'ok');
+  flash('printMsg', '프린트 준비 중...', 'ok');
   try {
-    const blob = await API.printBulk(ids, inc);
-    downloadBlob(blob, `단어프린트-${new Date().toISOString().slice(0,10)}.zip`);
-    flash('printMsg', 'ZIP 생성 완료!', 'ok');
+    const grammar = inc ? (await API.getGrammar()).filter(g => g.include_in_print) : [];
+    const jobs = [];
+    for (const sid of ids) {
+      const student = allStudents.find(s => s.id === sid);
+      const words = await API.getMyWords(sid);
+      const approved = words.filter(w => w.status === 'approved');
+      if (!approved.length) continue;
+      jobs.push({ studentName: student.name, words: selectWordsForPrint(approved) });
+    }
+    if (!jobs.length) return flash('printMsg', '승인된 단어가 있는 학생이 없습니다', 'err');
+    sessionStorage.setItem('printJob', JSON.stringify({ jobs, grammar }));
+    window.open('print.html', '_blank');
+    flash('printMsg', `프린트 창이 열렸습니다 (${jobs.length}명)`, 'ok');
   } catch(e) { flash('printMsg', e.message, 'err'); }
 };
 

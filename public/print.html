@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>단어 시험지</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Malgun Gothic', 'Apple Gothic', 'NanumGothic', sans-serif; padding: 20px; font-size: 12pt; }
+
+  .student-page { padding: 8mm; page-break-after: always; }
+  .student-page:last-child { page-break-after: auto; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; }
+  .header h1 { font-size: 17pt; font-weight: 700; }
+  .meta { text-align: right; font-size: 10pt; }
+  .meta .name-line { font-size: 13pt; font-weight: 700; margin-bottom: 3px; }
+
+  .score-line { display: flex; justify-content: flex-end; margin-bottom: 12px; font-size: 11pt; gap: 8px; align-items: center; }
+  .score-box { border: 1px solid #999; padding: 3px 20px; }
+
+  .word-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  .word-table th { background: #f0f0f0; border: 1px solid #666; padding: 5px 10px; font-size: 10pt; text-align: center; }
+  .word-table td { border: 1px solid #aaa; padding: 7px 10px; font-size: 11pt; }
+  .word-table tr:nth-child(even) td { background: #fafafa; }
+  .blank { display: inline-block; min-width: 110px; border-bottom: 1.5px solid #333; }
+
+  .grammar-section { margin-top: 14px; border-top: 1px solid #ccc; padding-top: 12px; }
+  .grammar-section h2 { font-size: 12pt; font-weight: 700; margin-bottom: 10px; }
+  .qa-item { margin-bottom: 8px; font-size: 10.5pt; }
+  .qa-q { font-weight: 700; }
+  .qa-a { color: #444; margin-left: 14px; margin-top: 2px; }
+
+  .no-print { padding: 12px 16px; background: #f0f4f8; margin-bottom: 16px; border-radius: 8px; display: flex; gap: 12px; align-items: center; }
+  .no-print button { padding: 10px 22px; background: #667eea; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; }
+  .no-print button:hover { background: #5a67d8; }
+  .no-print span { color: #718096; font-size: .88rem; }
+
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">인쇄 / PDF 저장</button>
+  <span>브라우저 인쇄 창에서 "PDF로 저장"을 선택하면 PDF 파일로 저장됩니다.</span>
+</div>
+
+<div id="content"></div>
+
+<script>
+const data = JSON.parse(sessionStorage.getItem('printJob') || 'null')
+
+if (!data) {
+  document.getElementById('content').innerHTML =
+    '<p style="color:red;padding:20px">인쇄 데이터가 없습니다. 관리자 화면의 프린트 탭에서 다시 시도하세요.</p>'
+} else {
+  const today = new Date()
+  const dateStr = `${today.getFullYear()}. ${String(today.getMonth()+1).padStart(2,'0')}. ${String(today.getDate()).padStart(2,'0')}.`
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  }
+
+  const grammarHtml = (data.grammar || []).length
+    ? `<div class="grammar-section">
+        <h2>문법 Q&A</h2>
+        ${data.grammar.map(g => `
+          <div class="qa-item">
+            <div class="qa-q">Q. ${esc(g.question)}</div>
+            <div class="qa-a">A. ${esc(g.answer)}</div>
+          </div>`).join('')}
+       </div>`
+    : ''
+
+  const content = data.jobs.map(job => {
+    const rows = job.words.map((w, i) => {
+      const blankEn = w.blank_type === 'english' || w.blank_type === 'both'
+      const blankKo = w.blank_type === 'korean'  || w.blank_type === 'both'
+      const enCell = blankEn ? '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' : esc(w.english)
+      const koCell = blankKo ? '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>' : esc(w.korean)
+      return `<tr><td style="text-align:center;width:30px;color:#999">${i+1}</td><td>${enCell}</td><td>${koCell}</td></tr>`
+    }).join('')
+
+    return `
+      <div class="student-page">
+        <div class="header">
+          <h1>단어 시험</h1>
+          <div class="meta">
+            <div class="name-line">이름: ${esc(job.studentName)}</div>
+            <div>${dateStr}</div>
+          </div>
+        </div>
+        <div class="score-line">점수: <span class="score-box">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
+        <table class="word-table">
+          <thead><tr><th>#</th><th>영어</th><th>한국어</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        ${grammarHtml}
+      </div>`
+  }).join('')
+
+  document.getElementById('content').innerHTML = content
+}
+</script>
+</body>
+</html>

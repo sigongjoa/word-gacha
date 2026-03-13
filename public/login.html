@@ -30,15 +30,16 @@
   <div class="err" id="err">비밀번호가 틀렸습니다.</div>
   <a href="index.html" class="back">← 학생 화면으로</a>
 </div>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script>
   async function doLogin() {
     const pw = document.getElementById('pw').value;
     const err = document.getElementById('err');
     err.style.display = 'none';
     try {
-      const res = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pw }) });
-      if (res.ok) { window.location.href = 'admin.html'; }
-      else { err.style.display = 'block'; }
+      await API.login(pw);
+      window.location.href = 'admin.html';
     } catch { err.style.display = 'block'; }
   }
   document.getElementById('loginBtn').onclick = doLogin;

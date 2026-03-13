@@ -35,12 +35,14 @@
 <p class="empty" id="empty" style="display:none">등록된 학생이 없습니다.<br>선생님에게 문의하세요.</p>
 <a href="login.html" class="admin-link">선생님 로그인 →</a>
 
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script>
   const avatars = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'];
 
   async function load() {
     try {
-      const students = await fetch('/api/students').then(r => r.json());
+      const students = await API.getStudents();
       document.getElementById('loading').style.display = 'none';
       if (!students.length) { document.getElementById('empty').style.display = 'block'; return; }
       const grid = document.getElementById('grid');
