@@ -49,6 +49,11 @@ const API = {
   async reviewWord(id, correct)  { return this._fetch(`/words/${id}/review`, { method: 'POST', body: JSON.stringify({ correct }) }) },
   async deleteWord(id)           { return this._fetch(`/words/${id}`, { method: 'DELETE' }) },
 
+  // 시험지 AI 생성
+  async generatePrint(studentIds, includeGrammar = true) {
+    return this._fetch('/generate-print', { method: 'POST', body: JSON.stringify({ studentIds, includeGrammar }) })
+  },
+
   // 문법 Q&A
   async getGrammar()            { return this._fetch('/grammar') },
   async addGrammar(data)        { return this._fetch('/grammar', { method: 'POST', body: JSON.stringify(data) }) },

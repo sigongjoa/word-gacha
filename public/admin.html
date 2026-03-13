@@ -109,10 +109,19 @@
   .flash.err { background: #fed7d7; color: #c53030; }
 
   .empty { text-align: center; color: #a0aec0; padding: 32px 0; font-size: .9rem; }
+
+  /* 토스트 알림 */
+  .toast-wrap { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast { padding: 12px 18px; border-radius: 10px; font-size: .88rem; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.15); opacity: 0; transform: translateX(30px); transition: all .25s ease; pointer-events: none; max-width: 320px; }
+  .toast.show { opacity: 1; transform: translateX(0); }
+  .toast.ok   { background: #c6f6d5; color: #276749; }
+  .toast.err  { background: #fed7d7; color: #c53030; }
+  .toast.info { background: #bee3f8; color: #2b6cb0; }
 </style>
 </head>
 <body>
 
+<div class="toast-wrap" id="toastWrap"></div>
 <header>
   <h1>📖 Word Gacha — 선생님</h1>
   <button class="logout-btn" id="logoutBtn">로그아웃</button>
@@ -225,8 +234,8 @@
 
   <div class="flash" id="printMsg"></div>
   <div class="print-actions">
-    <button class="btn btn-pdf" id="printSingleBtn">📄 개별 PDF</button>
-    <button class="btn btn-zip" id="printBulkBtn">📦 ZIP 일괄 출력</button>
+    <button class="btn btn-pdf" id="printSingleBtn">📄 시험지 생성</button>
+    <button class="btn btn-zip" id="printBulkBtn">📦 일괄 시험지 생성</button>
   </div>
 </div>
 
@@ -497,64 +506,53 @@ function getSelectedStudentIds() {
   return [...document.querySelectorAll('.print-student-cb:checked')].map(cb => cb.value);
 }
 
-function selectWordsForPrint(words, max = 20) {
-  const weighted = [];
-  words.forEach(w => {
-    const weight = [0, 5, 3, 2, 1][w.box] || 1;
-    for (let i = 0; i < weight; i++) weighted.push(w);
-  });
-  for (let i = weighted.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [weighted[i], weighted[j]] = [weighted[j], weighted[i]];
+function toast(msg, type = 'ok', duration = 3000) {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+async function runPrint(ids, inc) {
+  const btn1 = document.getElementById('printSingleBtn');
+  const btn2 = document.getElementById('printBulkBtn');
+  btn1.disabled = btn2.disabled = true;
+  btn1.textContent = btn2.textContent = '⏳ AI 생성 중...';
+  toast('AI가 문제를 생성하고 있습니다. 20~40초 소요됩니다.', 'info', 40000);
+  try {
+    const result = await API.generatePrint(ids, inc);
+    if (!result.jobs?.length) { toast('승인된 단어가 있는 학생이 없습니다', 'err'); return; }
+    sessionStorage.setItem('printJob', JSON.stringify(result));
+    window.open('print.html', '_blank');
+    toast(`시험지 생성 완료! (${result.jobs.length}명)`, 'ok');
+  } catch(e) {
+    toast(e.message || '생성 실패', 'err');
+  } finally {
+    btn1.disabled = btn2.disabled = false;
+    btn1.textContent = '📄 시험지 생성';
+    btn2.textContent = '📦 일괄 시험지 생성';
   }
-  const seen = new Set(), result = [];
-  for (const w of weighted) {
-    if (!seen.has(w.id) && result.length < max) { seen.add(w.id); result.push(w); }
-  }
-  return result;
 }
 
 document.getElementById('printSingleBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
   const inc = document.getElementById('includeGrammarCheck').checked;
-  if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
-  if (ids.length > 1) return flash('printMsg', '개별 프린트는 학생 1명을 선택하세요 (여러 명은 일괄 출력 사용)', 'err');
-  flash('printMsg', '프린트 준비 중...', 'ok');
-  try {
-    const student = allStudents.find(s => s.id === ids[0]);
-    const words = await API.getMyWords(ids[0]);
-    const approved = words.filter(w => w.status === 'approved');
-    if (!approved.length) return flash('printMsg', '승인된 단어가 없습니다', 'err');
-    const grammar = inc ? (await API.getGrammar()).filter(g => g.include_in_print) : [];
-    sessionStorage.setItem('printJob', JSON.stringify({
-      jobs: [{ studentName: student.name, words: selectWordsForPrint(approved) }],
-      grammar,
-    }));
-    window.open('print.html', '_blank');
-    flash('printMsg', '프린트 창이 열렸습니다', 'ok');
-  } catch(e) { flash('printMsg', e.message, 'err'); }
+  if (!ids.length) return toast('학생을 선택하세요', 'err');
+  if (ids.length > 1) return toast('개별 시험지는 학생 1명만 선택하세요', 'err');
+  await runPrint(ids, inc);
 };
 
 document.getElementById('printBulkBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
   const inc = document.getElementById('includeGrammarCheck').checked;
-  if (!ids.length) return flash('printMsg', '학생을 선택하세요', 'err');
-  flash('printMsg', '프린트 준비 중...', 'ok');
-  try {
-    const grammar = inc ? (await API.getGrammar()).filter(g => g.include_in_print) : [];
-    const jobs = [];
-    for (const sid of ids) {
-      const student = allStudents.find(s => s.id === sid);
-      const words = await API.getMyWords(sid);
-      const approved = words.filter(w => w.status === 'approved');
-      if (!approved.length) continue;
-      jobs.push({ studentName: student.name, words: selectWordsForPrint(approved) });
-    }
-    if (!jobs.length) return flash('printMsg', '승인된 단어가 있는 학생이 없습니다', 'err');
-    sessionStorage.setItem('printJob', JSON.stringify({ jobs, grammar }));
-    window.open('print.html', '_blank');
-    flash('printMsg', `프린트 창이 열렸습니다 (${jobs.length}명)`, 'ok');
-  } catch(e) { flash('printMsg', e.message, 'err'); }
+  if (!ids.length) return toast('학생을 선택하세요', 'err');
+  await runPrint(ids, inc);
 };
 
 // ══════════════════════════════════════════════════════════════
