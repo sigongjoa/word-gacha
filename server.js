@@ -245,14 +245,30 @@ const DB = {
 
 // ── Express 설정 ───────────────────────────────────────────────────
 const app = express();
-app.use(cors());
+const ALLOWED_ORIGINS = [
+  'http://localhost:3002',
+  'http://localhost:3000',
+  'https://sigongjoa.github.io',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // 브라우저 직접 요청(origin 없음) 또는 허용된 도메인만 허가
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: 허용되지 않은 출처입니다'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.static('public'));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'word-gacha-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 8 }
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 8,
+    httpOnly: true,
+    sameSite: 'lax',
+  },
 }));
 
 // ── 프린트 디렉터리 ────────────────────────────────────────────────
@@ -336,16 +352,18 @@ app.get('/api/words', requireAdmin, handle(async (req, res) => {
 }));
 
 app.post('/api/students/:id/words', handle(async (req, res) => {
-  const { english, korean, blank_type, added_by } = req.body;
+  const { english, korean, blank_type } = req.body;
   if (!english || !english.trim()) return res.status(400).json({ error: '영어 단어를 입력하세요' });
   if (!korean  || !korean.trim())  return res.status(400).json({ error: '한국어 뜻을 입력하세요' });
+  const VALID_BLANK_TYPES = ['korean', 'english'];
+  const safeBlankType = VALID_BLANK_TYPES.includes(blank_type) ? blank_type : 'korean';
   const isAdmin = req.session && req.session.isAdmin;
   res.json(await DB.addWord(req.params.id, {
     english:    english.trim(),
     korean:     korean.trim(),
-    blank_type: blank_type || 'korean',
+    blank_type: safeBlankType,
     status:     isAdmin ? 'approved' : 'pending',
-    added_by:   added_by || (isAdmin ? 'teacher' : 'student'),
+    added_by:   isAdmin ? 'teacher' : 'student',
   }));
 }));
 

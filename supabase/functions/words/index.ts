@@ -1,8 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(
@@ -44,11 +45,13 @@ Deno.serve(async (req) => {
     const { student_id, english, korean, blank_type } = await req.json()
     if (!english?.trim()) return json({ error: '영어 단어를 입력하세요' }, 400)
     if (!korean?.trim()) return json({ error: '한국어 뜻을 입력하세요' }, 400)
+    const VALID_BLANK_TYPES = ['korean', 'english']
+    const safeBlankType = VALID_BLANK_TYPES.includes(blank_type) ? blank_type : 'korean'
     const { data, error } = await supabase.from('words').insert({
       student_id,
       english: english.trim(),
       korean: korean.trim(),
-      blank_type: blank_type || 'korean',
+      blank_type: safeBlankType,
       status: isAdmin ? 'approved' : 'pending',
       added_by: isAdmin ? 'teacher' : 'student',
     }).select().single()

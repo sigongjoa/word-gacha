@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
 
 // Anki 박스 가중치 단어 선택
@@ -81,6 +81,7 @@ function parseJSON(text: string): unknown[] | null {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (!await verifyAdmin(req)) return unauthorized()
 

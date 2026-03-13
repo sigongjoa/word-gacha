@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
 
 const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY')
@@ -21,6 +21,7 @@ async function callGemini(prompt: string): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(
