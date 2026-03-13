@@ -54,11 +54,27 @@ const API = {
     return this._fetch('/generate-print', { method: 'POST', body: JSON.stringify({ studentIds, includeGrammar }) })
   },
 
-  // 문법 Q&A
+  // 문법 Q&A (공통)
   async getGrammar()            { return this._fetch('/grammar') },
+
+  // 문법 Q&A (관리자 — 질문+답변 동시 등록)
   async addGrammar(data)        { return this._fetch('/grammar', { method: 'POST', body: JSON.stringify(data) }) },
   async updateGrammar(id, data) { return this._fetch(`/grammar/${id}`, { method: 'PATCH', body: JSON.stringify(data) }) },
   async deleteGrammar(id)       { return this._fetch(`/grammar/${id}`, { method: 'DELETE' }) },
+  async aiAnswerGrammar(id)     { return this._fetch(`/grammar/${id}/ai-answer`, { method: 'POST' }) },
+
+  // 문법 Q&A (학생 — 질문만 등록)
+  async addGrammarQuestion(studentId, studentName, question) {
+    return this._fetch('/grammar', {
+      method: 'POST',
+      body: JSON.stringify({ student_id: studentId, student_name: studentName, question }),
+    })
+  },
+
+  // 문법 Q&A (학생 — 본인 질문 삭제)
+  async deleteGrammarQuestion(id, studentId) {
+    return this._fetch(`/grammar/${id}?student_id=${encodeURIComponent(studentId)}`, { method: 'DELETE' })
+  },
 }
 
 function downloadBlob(blob, filename) {

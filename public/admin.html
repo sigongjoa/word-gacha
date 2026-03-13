@@ -85,7 +85,14 @@
   .qa-body { flex: 1; }
   .qa-q { font-weight: 700; color: #2d3748; margin-bottom: 4px; }
   .qa-a { color: #718096; font-size: .88rem; }
-  .qa-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .qa-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .qa-meta { font-size: .75rem; color: #a0aec0; margin-top: 4px; }
+  .badge.student-q { background: #bee3f8; color: #2b6cb0; }
+  .badge.ai-ans { background: #e9d8fd; color: #6b46c1; }
+  /* 답변 입력 영역 */
+  .answer-form { margin-top: 10px; display: none; }
+  .answer-form textarea { width: 100%; padding: 9px 12px; border: 1.5px solid #667eea; border-radius: 9px; font-size: .88rem; resize: vertical; min-height: 70px; font-family: inherit; outline: none; }
+  .answer-form-btns { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
 
   /* 프린트 탭 */
   .student-check-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
@@ -129,6 +136,7 @@
 
 <div class="tabs">
   <div class="tab active" data-tab="words">📝 단어 관리</div>
+  <div class="tab" data-tab="student-questions">📬 학생 질문</div>
   <div class="tab" data-tab="grammar">📚 문법 Q&amp;A</div>
   <div class="tab" data-tab="print">🖨️ 프린트</div>
   <div class="tab" data-tab="students">👤 학생 관리</div>
@@ -184,7 +192,26 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     TAB 2: 문법 Q&A
+     TAB 2: 학생 질문
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-student-questions">
+  <div class="card">
+    <h2>📬 학생 질문 목록</h2>
+    <div class="filter-bar">
+      <label>상태:</label>
+      <select id="filterSQStatus">
+        <option value="">전체</option>
+        <option value="pending">대기중</option>
+        <option value="answered">답변됨</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="refreshSQ">새로고침</button>
+    </div>
+    <div id="studentQuestionList"><div class="empty">불러오는 중...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TAB 3: 문법 Q&A
 ═══════════════════════════════════════════ -->
 <div class="tab-content" id="tab-grammar">
   <div class="card">
@@ -279,10 +306,11 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'words')    loadWords();
-    if (tab.dataset.tab === 'grammar')  loadGrammar();
-    if (tab.dataset.tab === 'print')    loadPrintTab();
-    if (tab.dataset.tab === 'students') loadStudents();
+    if (tab.dataset.tab === 'words')             loadWords();
+    if (tab.dataset.tab === 'student-questions') loadStudentQuestions();
+    if (tab.dataset.tab === 'grammar')           loadGrammar();
+    if (tab.dataset.tab === 'print')             loadPrintTab();
+    if (tab.dataset.tab === 'students')          loadStudents();
   };
 });
 
@@ -416,10 +444,109 @@ document.getElementById('filterStudent').onchange = loadWords;
 document.getElementById('filterStatus').onchange  = loadWords;
 
 // ══════════════════════════════════════════════════════════════
+// 학생 질문 탭
+// ══════════════════════════════════════════════════════════════
+async function loadStudentQuestions() {
+  const statusFilter = document.getElementById('filterSQStatus').value;
+  const all = await API.getGrammar().catch(() => []);
+  // 학생 질문만 (student_id 있는 것)
+  let list = all.filter(g => g.student_id);
+  if (statusFilter) list = list.filter(g => g.status === statusFilter);
+
+  const el = document.getElementById('studentQuestionList');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">학생 질문이 없습니다.</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(g => `
+    <div class="qa-item" data-id="${g.id}">
+      <div class="qa-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span class="badge student-q">📬 ${esc(g.student_name || '학생')}</span>
+          <span class="badge ${g.status === 'pending' ? 'pending' : 'approved'}">
+            ${g.status === 'pending' ? '⏳ 대기중' : '✅ 답변됨'}
+          </span>
+          ${g.answered_by === 'ai' ? '<span class="badge ai-ans">🤖 AI 답변</span>' : ''}
+        </div>
+        <div class="qa-q">Q. ${esc(g.question)}</div>
+        ${g.answer
+          ? `<div class="qa-a" style="margin-top:6px;">A. ${esc(g.answer)}</div>`
+          : `<div class="qa-meta">아직 답변이 없습니다</div>`
+        }
+        <div class="answer-form" id="answerForm-${g.id}">
+          <textarea id="answerText-${g.id}" placeholder="답변을 입력하세요...">${esc(g.answer || '')}</textarea>
+          <div class="answer-form-btns">
+            <button class="btn btn-sm btn-outline" onclick="toggleAnswerForm('${g.id}')">취소</button>
+            <button class="btn btn-sm btn-primary" onclick="submitAnswer('${g.id}')">저장</button>
+          </div>
+        </div>
+        ${g.status === 'answered'
+          ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+               <label style="font-size:.78rem;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                 <input type="checkbox" ${g.include_in_print ? 'checked' : ''} onchange="toggleSQPrint('${g.id}', this.checked)">
+                 프린트 포함
+               </label>
+             </div>`
+          : ''
+        }
+      </div>
+      <div class="qa-actions">
+        <button class="btn btn-sm btn-outline" onclick="toggleAnswerForm('${g.id}')">
+          ${g.answer ? '수정' : '직접 답변'}
+        </button>
+        <button class="btn btn-sm btn-warn" onclick="aiAnswerQuestion('${g.id}')">🤖 AI 답변</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSQ('${g.id}')">삭제</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleAnswerForm(id) {
+  const form = document.getElementById(`answerForm-${id}`);
+  form.style.display = form.style.display === 'block' ? 'none' : 'block';
+}
+
+async function submitAnswer(id) {
+  const answer = document.getElementById(`answerText-${id}`).value.trim();
+  if (!answer) { alert('답변을 입력하세요'); return; }
+  try {
+    await API.updateGrammar(id, { answer, status: 'answered', answered_by: 'teacher' });
+    loadStudentQuestions();
+  } catch(e) { alert(e.message); }
+}
+
+async function aiAnswerQuestion(id) {
+  if (!confirm('AI가 답변을 생성합니다. 계속할까요?')) return;
+  try {
+    toast('AI가 답변을 생성하고 있습니다...', 'info', 8000);
+    await API.aiAnswerGrammar(id);
+    toast('AI 답변이 생성됐습니다', 'ok');
+    loadStudentQuestions();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function toggleSQPrint(id, val) {
+  try { await API.updateGrammar(id, { include_in_print: val }); loadStudentQuestions(); }
+  catch(e) { alert(e.message); }
+}
+
+async function deleteSQ(id) {
+  if (!confirm('질문을 삭제할까요?')) return;
+  try { await API.deleteGrammar(id); loadStudentQuestions(); }
+  catch(e) { alert(e.message); }
+}
+
+document.getElementById('filterSQStatus').onchange = loadStudentQuestions;
+document.getElementById('refreshSQ').onclick = loadStudentQuestions;
+
+// ══════════════════════════════════════════════════════════════
 // 문법 Q&A
 // ══════════════════════════════════════════════════════════════
 async function loadGrammar() {
-  const list = await API.getGrammar().catch(() => []);
+  const all  = await API.getGrammar().catch(() => []);
+  // 선생님이 직접 만든 Q&A만 (student_id 없는 것)
+  const list = all.filter(g => !g.student_id);
   const el   = document.getElementById('grammarList');
   if (!list.length) { el.innerHTML = '<div class="empty">등록된 문법 Q&A가 없습니다.</div>'; return; }
   el.innerHTML = list.map(g => `

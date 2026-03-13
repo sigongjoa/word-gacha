@@ -186,7 +186,7 @@ const DB = {
       return data;
     }
     const d = loadData();
-    const g = { id: newId(), created_at: now(), ...fields };
+    const g = { id: newId(), created_at: now(), include_in_print: false, status: 'pending', answered_by: null, ...fields };
     d.grammar_qa.push(g); saveData(d); return g;
   },
   async updateGrammar(id, updates) {
@@ -209,6 +209,37 @@ const DB = {
     const d = loadData();
     d.grammar_qa = d.grammar_qa.filter(g => g.id !== id);
     saveData(d);
+  },
+  async aiAnswerGrammar(id) {
+    const GEMINI_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_KEY) throw new Error('GEMINI_API_KEY가 설정되지 않았습니다');
+
+    let question;
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase.from('grammar_qa').select('question').eq('id', id).single();
+      if (error || !data) throw new Error('항목을 찾을 수 없습니다');
+      question = data.question;
+    } else {
+      const g = loadData().grammar_qa.find(g => g.id === id);
+      if (!g) throw new Error('항목을 찾을 수 없습니다');
+      question = g.question;
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `다음 영어 문법 질문에 한국어로 간결하고 명확하게 답변해주세요.\n\n질문: ${question}\n\n답변:` }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
+        }),
+      }
+    );
+    const aiData = await res.json();
+    const answer = aiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '답변 생성 실패';
+
+    return this.updateGrammar(id, { answer, status: 'answered', answered_by: 'ai' });
   },
 };
 
@@ -341,21 +372,64 @@ app.get('/api/grammar', handle(async (req, res) => {
   res.json(await DB.getGrammar());
 }));
 
-app.post('/api/grammar', requireAdmin, handle(async (req, res) => {
-  const { question, answer, include_in_print } = req.body;
+app.post('/api/grammar', handle(async (req, res) => {
+  const isAdmin = req.session && req.session.isAdmin;
+  const { question, answer, include_in_print, student_id, student_name } = req.body;
+
   if (!question || !question.trim()) return res.status(400).json({ error: '질문을 입력하세요' });
-  if (!answer   || !answer.trim())   return res.status(400).json({ error: '답변을 입력하세요' });
-  res.json(await DB.addGrammar({ question: question.trim(), answer: answer.trim(), include_in_print: include_in_print !== false }));
+
+  if (isAdmin) {
+    // 선생님: 질문 + 답변 동시 등록
+    if (!answer || !answer.trim()) return res.status(400).json({ error: '답변을 입력하세요' });
+    res.json(await DB.addGrammar({
+      question: question.trim(),
+      answer:   answer.trim(),
+      include_in_print: include_in_print !== false,
+      status:      'answered',
+      answered_by: 'teacher',
+      student_id:  null,
+      student_name: null,
+    }));
+  } else {
+    // 학생: 질문만 등록
+    if (!student_id) return res.status(400).json({ error: 'student_id가 필요합니다' });
+    res.json(await DB.addGrammar({
+      question:    question.trim(),
+      answer:      null,
+      include_in_print: false,
+      status:      'pending',
+      answered_by: null,
+      student_id,
+      student_name: student_name || null,
+    }));
+  }
+}));
+
+app.post('/api/grammar/:id/ai-answer', requireAdmin, handle(async (req, res) => {
+  res.json(await DB.aiAnswerGrammar(req.params.id));
 }));
 
 app.patch('/api/grammar/:id', requireAdmin, handle(async (req, res) => {
-  const allowed = ['question', 'answer', 'include_in_print'];
+  const allowed = ['question', 'answer', 'include_in_print', 'status', 'answered_by'];
   const updates = {};
   allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
   res.json(await DB.updateGrammar(req.params.id, updates));
 }));
 
-app.delete('/api/grammar/:id', requireAdmin, handle(async (req, res) => {
+app.delete('/api/grammar/:id', handle(async (req, res) => {
+  const isAdmin = req.session && req.session.isAdmin;
+  const { student_id } = req.query;
+
+  if (!isAdmin && !student_id) return res.status(401).json({ error: '권한이 없습니다' });
+
+  if (!isAdmin && student_id) {
+    // 학생 본인 질문만 삭제 가능
+    const list = await DB.getGrammar();
+    const g = list.find(g => g.id === req.params.id);
+    if (!g) return res.status(404).json({ error: '항목을 찾을 수 없습니다' });
+    if (g.student_id !== student_id) return res.status(403).json({ error: '삭제 권한이 없습니다' });
+  }
+
   await DB.deleteGrammar(req.params.id);
   res.json({ success: true });
 }));

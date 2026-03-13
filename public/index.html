@@ -40,6 +40,11 @@
 <script>
   const avatars = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'];
 
+  function getAvatar(name, index) {
+    if (name === '이루다') return '🌻';
+    return avatars[index % avatars.length];
+  }
+
   async function load() {
     try {
       const students = await API.getStudents();
@@ -50,7 +55,7 @@
       students.forEach((s, i) => {
         const btn = document.createElement('div');
         btn.className = 'student-btn';
-        btn.innerHTML = `<div class="avatar">${avatars[i % avatars.length]}</div>${s.name}`;
+        btn.innerHTML = `<div class="avatar">${getAvatar(s.name, i)}</div>${s.name}`;
         btn.onclick = () => {
           sessionStorage.setItem('studentId',   s.id);
           sessionStorage.setItem('studentName', s.name);

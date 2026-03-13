@@ -43,12 +43,27 @@ CREATE INDEX IF NOT EXISTS idx_words_created_at   ON words(created_at DESC);
 CREATE TABLE IF NOT EXISTS grammar_qa (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   question         TEXT NOT NULL,
-  answer           TEXT NOT NULL,
+  answer           TEXT,                          -- 학생 질문은 답변 없이 시작
   include_in_print BOOLEAN NOT NULL DEFAULT true,
+  student_id       UUID REFERENCES students(id) ON DELETE SET NULL,
+  student_name     TEXT,                          -- 질문한 학생 이름 (표시용)
+  status           TEXT NOT NULL DEFAULT 'answered' CHECK (status IN ('pending', 'answered')),
+  answered_by      TEXT CHECK (answered_by IN ('teacher', 'ai')),
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_grammar_include ON grammar_qa(include_in_print);
+CREATE INDEX IF NOT EXISTS idx_grammar_status  ON grammar_qa(status);
+
+-- ============================================
+-- 마이그레이션 (기존 DB에 실행):
+-- ALTER TABLE grammar_qa
+--   ALTER COLUMN answer DROP NOT NULL,
+--   ADD COLUMN IF NOT EXISTS student_id UUID REFERENCES students(id) ON DELETE SET NULL,
+--   ADD COLUMN IF NOT EXISTS student_name TEXT,
+--   ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'answered' CHECK (status IN ('pending', 'answered')),
+--   ADD COLUMN IF NOT EXISTS answered_by TEXT CHECK (answered_by IN ('teacher', 'ai'));
+-- ============================================
 
 -- ============================================
 -- 4. RLS (Row Level Security) — 공개 접근

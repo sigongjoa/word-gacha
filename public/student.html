@@ -7,12 +7,23 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 0 0 40px; }
-  header { background: #667eea; color: #fff; padding: 20px 20px 24px; }
+  header { background: #667eea; color: #fff; padding: 20px 20px 0; }
+  header .top { display: flex; align-items: flex-start; flex-direction: column; padding-bottom: 0; }
   header h1 { font-size: 1.3rem; font-weight: 700; }
   header p  { font-size: .85rem; opacity: .85; margin-top: 4px; }
   .back { color: #fff; opacity: .8; text-decoration: none; font-size: .85rem; display: inline-block; margin-bottom: 8px; }
   .back:hover { opacity: 1; }
+
+  /* 탭 */
+  .tabs { display: flex; margin-top: 16px; }
+  .tab { padding: 10px 20px; cursor: pointer; font-size: .9rem; font-weight: 600; color: rgba(255,255,255,.7);
+         border-bottom: 3px solid transparent; transition: all .18s; }
+  .tab.active { color: #fff; border-bottom-color: #fff; }
+  .tab:hover:not(.active) { color: rgba(255,255,255,.9); }
+
   .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
 
   /* 입력 폼 */
   .add-card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
@@ -21,46 +32,96 @@
   .row input { flex: 1; padding: 11px 13px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: .95rem; outline: none; transition: border-color .2s; }
   .row input:focus { border-color: #667eea; }
   .row input::placeholder { color: #cbd5e0; }
-  .submit-btn { width: 100%; padding: 12px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: .95rem; font-weight: 600; cursor: pointer; transition: background .2s; }
+  textarea.grammar-input {
+    width: 100%; padding: 11px 13px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-size: .95rem; outline: none; transition: border-color .2s; resize: vertical;
+    min-height: 80px; font-family: inherit;
+  }
+  textarea.grammar-input:focus { border-color: #667eea; }
+  textarea.grammar-input::placeholder { color: #cbd5e0; }
+  .submit-btn { width: 100%; padding: 12px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: .95rem; font-weight: 600; cursor: pointer; transition: background .2s; margin-top: 4px; }
   .submit-btn:hover { background: #5a67d8; }
   .msg { font-size: .82rem; margin-top: 8px; height: 18px; }
   .msg.ok  { color: #38a169; }
   .msg.err { color: #e53e3e; }
 
-  /* 단어 목록 */
+  /* 섹션 타이틀 */
   .section-title { font-size: .85rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+
+  /* 단어 목록 */
   .word-list { display: flex; flex-direction: column; gap: 8px; }
   .word-item { background: #fff; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
   .word-en { font-weight: 700; color: #2d3748; font-size: .95rem; flex: 1; }
   .word-ko { color: #718096; font-size: .9rem; flex: 1; }
   .badge { font-size: .72rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
   .badge.pending  { background: #fefcbf; color: #b7791f; }
-  .badge.approved { background: #c6f6d5; color: #276749; }
+  .badge.answered { background: #c6f6d5; color: #276749; }
   .empty-words { text-align: center; color: #a0aec0; padding: 32px 0; font-size: .9rem; }
+
+  /* 문법 Q&A */
+  .qa-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.05); margin-bottom: 8px; }
+  .qa-q { font-weight: 700; color: #2d3748; font-size: .95rem; margin-bottom: 6px; }
+  .qa-a { color: #4a5568; font-size: .9rem; line-height: 1.6; padding: 10px 12px; background: #f7fafc; border-radius: 8px; }
+  .qa-pending { color: #b7791f; font-size: .85rem; padding: 8px 12px; background: #fefcbf; border-radius: 8px; }
+  .qa-footer { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .qa-mine-badge { font-size: .72rem; padding: 2px 8px; border-radius: 20px; background: #bee3f8; color: #2b6cb0; font-weight: 600; margin-right: auto; }
+  .btn-delete-q { font-size: .75rem; padding: 4px 10px; border: none; border-radius: 8px; background: #fed7d7; color: #c53030; cursor: pointer; font-weight: 600; }
+  .btn-delete-q:hover { background: #feb2b2; }
+
+  .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
 </style>
 </head>
 <body>
 <header>
-  <a href="index.html" class="back">← 돌아가기</a>
-  <h1 id="studentName">단어장</h1>
-  <p>모르거나 틀린 단어를 추가하세요</p>
+  <div class="top">
+    <a href="index.html" class="back">← 돌아가기</a>
+    <h1 id="studentName">단어장</h1>
+    <p>모르는 단어와 문법을 추가하세요</p>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="words">📚 단어장</div>
+    <div class="tab" data-tab="grammar">❓ 문법 질문</div>
+  </div>
 </header>
 
 <div class="container">
-  <div class="add-card">
-    <h2>+ 새 단어 추가</h2>
-    <div class="row">
-      <input id="enInput" type="text" placeholder="영어 단어 (예: ambiguous)">
+
+  <!-- ── 단어 탭 ───────────────────────────────── -->
+  <div class="tab-content active" id="tab-words">
+    <div class="add-card">
+      <h2>+ 새 단어 추가</h2>
+      <div class="row">
+        <input id="enInput" type="text" placeholder="영어 단어 (예: ambiguous)">
+      </div>
+      <div class="row">
+        <input id="koInput" type="text" placeholder="한국어 뜻 (예: 모호한)">
+      </div>
+      <button class="submit-btn" id="addBtn">추가하기</button>
+      <div class="msg" id="wordMsg"></div>
     </div>
-    <div class="row">
-      <input id="koInput" type="text" placeholder="한국어 뜻 (예: 모호한)">
-    </div>
-    <button class="submit-btn" id="addBtn">추가하기</button>
-    <div class="msg" id="msg"></div>
+
+    <p class="section-title">내 단어 목록</p>
+    <div id="wordList"><div class="empty-words">단어를 추가해보세요 📝</div></div>
   </div>
 
-  <p class="section-title">내 단어 목록</p>
-  <div id="wordList"><div class="empty-words">단어를 추가해보세요 📝</div></div>
+  <!-- ── 문법 질문 탭 ──────────────────────────── -->
+  <div class="tab-content" id="tab-grammar">
+    <div class="add-card">
+      <h2>❓ 문법 질문하기</h2>
+      <textarea class="grammar-input" id="grammarInput" placeholder="궁금한 영어 문법을 질문해주세요&#10;예) 현재완료와 과거시제의 차이가 무엇인가요?"></textarea>
+      <button class="submit-btn" id="addGrammarBtn">질문 올리기</button>
+      <div class="msg" id="grammarMsg"></div>
+    </div>
+
+    <p class="section-title">내 질문</p>
+    <div id="myGrammarList"><div class="empty-words">아직 질문이 없어요 ✏️</div></div>
+
+    <div class="divider"></div>
+
+    <p class="section-title">선생님 문법 자료</p>
+    <div id="teacherGrammarList"><div class="empty-words">등록된 문법 자료가 없어요</div></div>
+  </div>
+
 </div>
 
 <script src="js/config.js"></script>
@@ -71,6 +132,18 @@
   if (!studentId) { window.location.href = 'index.html'; }
   document.getElementById('studentName').textContent = studentName + '님의 단어장';
 
+  // ── 탭 전환 ──────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.onclick = () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'grammar') loadGrammar();
+    };
+  });
+
+  // ── 단어 ─────────────────────────────────────────────────
   async function loadWords() {
     try {
       const words = await API.getMyWords(studentId);
@@ -89,7 +162,7 @@
   async function addWord() {
     const en  = document.getElementById('enInput').value.trim();
     const ko  = document.getElementById('koInput').value.trim();
-    const msg = document.getElementById('msg');
+    const msg = document.getElementById('wordMsg');
     msg.className = 'msg'; msg.textContent = '';
     if (!en || !ko) { msg.className = 'msg err'; msg.textContent = '영어 단어와 뜻을 모두 입력하세요.'; return; }
     try {
@@ -105,6 +178,79 @@
 
   document.getElementById('addBtn').onclick = addWord;
   document.getElementById('koInput').addEventListener('keydown', e => { if (e.key === 'Enter') addWord(); });
+
+  // ── 문법 Q&A ─────────────────────────────────────────────
+  async function loadGrammar() {
+    try {
+      const all = await API.getGrammar();
+
+      // 내 질문: student_id가 나인 것
+      const mine    = all.filter(g => g.student_id === studentId);
+      // 선생님 자료: student_id가 null이고 answered인 것
+      const teacher = all.filter(g => !g.student_id && g.status === 'answered');
+
+      renderMyGrammar(mine);
+      renderTeacherGrammar(teacher);
+    } catch { }
+  }
+
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function renderMyGrammar(list) {
+    const el = document.getElementById('myGrammarList');
+    if (!list.length) { el.innerHTML = '<div class="empty-words">아직 질문이 없어요 ✏️</div>'; return; }
+    el.innerHTML = list.map(g => `
+      <div class="qa-card">
+        <div class="qa-q">Q. ${esc(g.question)}</div>
+        ${g.status === 'answered' && g.answer
+          ? `<div class="qa-a">${esc(g.answer)}</div>`
+          : `<div class="qa-pending">⏳ 선생님 답변을 기다리는 중이에요</div>`
+        }
+        <div class="qa-footer">
+          <span class="qa-mine-badge">내 질문</span>
+          <button class="btn-delete-q" onclick="deleteMyQuestion('${g.id}')">삭제</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderTeacherGrammar(list) {
+    const el = document.getElementById('teacherGrammarList');
+    if (!list.length) { el.innerHTML = '<div class="empty-words">등록된 문법 자료가 없어요</div>'; return; }
+    el.innerHTML = list.map(g => `
+      <div class="qa-card">
+        <div class="qa-q">Q. ${esc(g.question)}</div>
+        <div class="qa-a">${esc(g.answer)}</div>
+      </div>
+    `).join('');
+  }
+
+  async function addGrammarQuestion() {
+    const q   = document.getElementById('grammarInput').value.trim();
+    const msg = document.getElementById('grammarMsg');
+    msg.className = 'msg'; msg.textContent = '';
+    if (!q) { msg.className = 'msg err'; msg.textContent = '질문을 입력해주세요.'; return; }
+    try {
+      await API.addGrammarQuestion(studentId, studentName, q);
+      document.getElementById('grammarInput').value = '';
+      msg.className = 'msg ok'; msg.textContent = '질문이 등록됐어요! 선생님이 답변할 예정이에요.';
+      loadGrammar();
+    } catch (e) {
+      msg.className = 'msg err'; msg.textContent = e.message;
+    }
+  }
+
+  async function deleteMyQuestion(id) {
+    if (!confirm('질문을 삭제할까요?')) return;
+    try {
+      await API.deleteGrammarQuestion(id, studentId);
+      loadGrammar();
+    } catch (e) { alert(e.message); }
+  }
+
+  document.getElementById('addGrammarBtn').onclick = addGrammarQuestion;
+
+  // 초기 로드
   loadWords();
 </script>
 </body>
