@@ -3,3 +3,6 @@ node_modules/
 print/tmp/
 *.pdf
 *.zip
+data.json
+server.log
+supabase/.temp/
