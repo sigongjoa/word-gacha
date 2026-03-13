@@ -284,12 +284,13 @@
   </div>
 
   <div class="card">
-    <h2>문법 Q&A 포함 여부</h2>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
-      <input type="checkbox" id="includeGrammarCheck" checked>
-      <span style="font-size:.9rem;">문법 Q&A를 프린트에 포함</span>
-    </label>
-    <div id="grammarPreviewList" class="grammar-check-list"></div>
+    <h2>문법 Q&A 선택</h2>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm" id="selectAllGrammar">전체 선택</button>
+      <button class="btn btn-outline btn-sm" id="deselectAllGrammar">전체 해제</button>
+    </div>
+    <div id="grammarCheckList" class="grammar-check-list"></div>
+    <div id="grammarEmptyMsg" style="color:#a0aec0;font-size:.85rem;display:none;">답변된 문법 Q&A가 없습니다</div>
   </div>
 
   <div class="flash" id="printMsg"></div>
@@ -736,20 +737,42 @@ async function loadPrintTab() {
     </label>
   `).join('');
 
-  // 문법 미리보기
-  const glist = document.getElementById('grammarPreviewList');
-  glist.innerHTML = grammar.filter(g => g.include_in_print).map(g => `
-    <div class="grammar-check">
-      <span style="color:#4a5568;">Q. ${esc(g.question)}</span>
-    </div>
-  `).join('') || '<div style="color:#a0aec0;font-size:.85rem;">프린트 포함 문법 없음</div>';
+  // 문법 Q&A 개별 선택 체크박스 (선생님 Q&A + 답변된 학생 질문)
+  const answered = grammar.filter(g => g.status === 'answered' && g.answer);
+  const gcl = document.getElementById('grammarCheckList');
+  const gem = document.getElementById('grammarEmptyMsg');
+  if (!answered.length) {
+    gcl.innerHTML = '';
+    gem.style.display = 'block';
+  } else {
+    gem.style.display = 'none';
+    gcl.innerHTML = answered.map(g => {
+      const label = g.student_id
+        ? `📬 ${esc(g.student_name || '학생')} 질문`
+        : '📚 선생님 Q&A';
+      return `
+        <label class="grammar-check">
+          <input type="checkbox" value="${g.id}" class="print-grammar-cb" checked>
+          <span style="flex:1;">
+            <span style="font-size:.72rem;color:#718096;">${label}</span><br>
+            Q. ${esc(g.question)}
+          </span>
+        </label>`;
+    }).join('');
+  }
 }
 
 document.getElementById('selectAllStudents').onclick   = () => document.querySelectorAll('.print-student-cb').forEach(cb => cb.checked = true);
 document.getElementById('deselectAllStudents').onclick = () => document.querySelectorAll('.print-student-cb').forEach(cb => cb.checked = false);
+document.getElementById('selectAllGrammar').onclick    = () => document.querySelectorAll('.print-grammar-cb').forEach(cb => cb.checked = true);
+document.getElementById('deselectAllGrammar').onclick  = () => document.querySelectorAll('.print-grammar-cb').forEach(cb => cb.checked = false);
 
 function getSelectedStudentIds() {
   return [...document.querySelectorAll('.print-student-cb:checked')].map(cb => cb.value);
+}
+
+function getSelectedGrammarIds() {
+  return [...document.querySelectorAll('.print-grammar-cb:checked')].map(cb => cb.value);
 }
 
 function toast(msg, type = 'ok', duration = 3000) {
@@ -765,7 +788,7 @@ function toast(msg, type = 'ok', duration = 3000) {
   }, duration);
 }
 
-async function runPrint(ids, inc) {
+async function runPrint(ids, grammarIds) {
   const btn1 = document.getElementById('printSingleBtn');
   const btn2 = document.getElementById('printBulkBtn');
   const openBtn = document.getElementById('printOpenBtn');
@@ -774,15 +797,13 @@ async function runPrint(ids, inc) {
   openBtn.style.display = 'none';
   toast('AI가 문제를 생성하고 있습니다. 20~40초 소요됩니다.', 'info', 45000);
   try {
-    const result = await API.generatePrint(ids, inc);
+    const result = await API.generatePrint(ids, grammarIds);
     if (!result.jobs?.length) { toast('승인된 단어가 있는 학생이 없습니다', 'err'); return; }
-    // localStorage: 탭 간 공유 가능
     localStorage.setItem('printJob', JSON.stringify(result));
     const win = window.open('print.html', '_blank');
     if (win) {
       toast(`시험지 생성 완료! (${result.jobs.length}명)`, 'ok');
     } else {
-      // 팝업 차단 시 버튼으로 대체
       toast('팝업이 차단됐습니다. 아래 버튼을 클릭하세요.', 'err', 8000);
       openBtn.style.display = 'inline-block';
     }
@@ -797,17 +818,17 @@ async function runPrint(ids, inc) {
 
 document.getElementById('printSingleBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
-  const inc = document.getElementById('includeGrammarCheck').checked;
+  const grammarIds = getSelectedGrammarIds();
   if (!ids.length) return toast('학생을 선택하세요', 'err');
   if (ids.length > 1) return toast('개별 시험지는 학생 1명만 선택하세요', 'err');
-  await runPrint(ids, inc);
+  await runPrint(ids, grammarIds);
 };
 
 document.getElementById('printBulkBtn').onclick = async () => {
   const ids = getSelectedStudentIds();
-  const inc = document.getElementById('includeGrammarCheck').checked;
+  const grammarIds = getSelectedGrammarIds();
   if (!ids.length) return toast('학생을 선택하세요', 'err');
-  await runPrint(ids, inc);
+  await runPrint(ids, grammarIds);
 };
 
 // ══════════════════════════════════════════════════════════════

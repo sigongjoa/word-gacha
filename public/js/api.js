@@ -49,9 +49,9 @@ const API = {
   async reviewWord(id, correct)  { return this._fetch(`/words/${id}/review`, { method: 'POST', body: JSON.stringify({ correct }) }) },
   async deleteWord(id)           { return this._fetch(`/words/${id}`, { method: 'DELETE' }) },
 
-  // 시험지 AI 생성
-  async generatePrint(studentIds, includeGrammar = true) {
-    return this._fetch('/generate-print', { method: 'POST', body: JSON.stringify({ studentIds, includeGrammar }) })
+  // 시험지 AI 생성 (grammarIds: 선택된 문법 Q&A ID 배열, 빈 배열이면 문법 제외)
+  async generatePrint(studentIds, grammarIds = []) {
+    return this._fetch('/generate-print', { method: 'POST', body: JSON.stringify({ studentIds, grammarIds }) })
   },
 
   // 문법 Q&A (공통)

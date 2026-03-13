@@ -501,16 +501,17 @@ function injectWordSheet(template, studentName, words, grammarList) {
 }
 
 app.post('/api/print/word-sheet', requireAdmin, handle(async (req, res) => {
-  const { studentId, includeGrammar = true } = req.body;
+  const { studentId, grammarIds } = req.body;
   const student = await DB.getStudent(studentId);
   const allWords = await DB.getWordsByStudent(studentId);
   const approved = allWords.filter(w => w.status === 'approved');
   if (!approved.length) return res.status(400).json({ error: '승인된 단어가 없습니다' });
 
   const words = selectWordsForPrint(approved, 20);
-  const grammarList = includeGrammar
-    ? (await DB.getGrammar()).filter(g => g.include_in_print)
-    : [];
+  const allGrammar = await DB.getGrammar();
+  const grammarList = Array.isArray(grammarIds) && grammarIds.length > 0
+    ? allGrammar.filter(g => grammarIds.includes(g.id) && g.status === 'answered')
+    : allGrammar.filter(g => g.include_in_print);
 
   const buf = await buildPDF(
     path.join(PRINT_DIR, 'word-sheet.typ'),
@@ -524,12 +525,13 @@ app.post('/api/print/word-sheet', requireAdmin, handle(async (req, res) => {
 }));
 
 app.post('/api/print/bulk', requireAdmin, handle(async (req, res) => {
-  const { studentIds, includeGrammar = true } = req.body;
+  const { studentIds, grammarIds } = req.body;
   if (!studentIds || !studentIds.length) return res.status(400).json({ error: '학생을 선택하세요' });
 
-  const grammarList = includeGrammar
-    ? (await DB.getGrammar()).filter(g => g.include_in_print)
-    : [];
+  const allGrammar = await DB.getGrammar();
+  const grammarList = Array.isArray(grammarIds) && grammarIds.length > 0
+    ? allGrammar.filter(g => grammarIds.includes(g.id) && g.status === 'answered')
+    : allGrammar.filter(g => g.include_in_print);
 
   const date = new Date().toISOString().slice(0, 10);
   res.setHeader('Content-Type', 'application/zip');

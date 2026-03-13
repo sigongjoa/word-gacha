@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  const { studentIds, includeGrammar = true } = await req.json()
+  const { studentIds, grammarIds } = await req.json()
   if (!studentIds?.length) return json({ error: '학생을 선택하세요' }, 400)
 
   // 오답 풀: 다른 학생들의 승인된 단어
@@ -107,12 +107,19 @@ Deno.serve(async (req) => {
 
   // 문법 문제 생성 (모든 학생 공통 — 1회만 Gemini 호출)
   let sharedPart3: unknown[] = []
+  const includeGrammar = Array.isArray(grammarIds) ? grammarIds.length > 0 : true
   if (includeGrammar) {
-    const { data: grammarList } = await supabase
-      .from('grammar_qa')
-      .select('*')
-      .eq('include_in_print', true)
-      .order('created_at')
+    let grammarQuery = supabase.from('grammar_qa').select('*').eq('status', 'answered')
+
+    if (Array.isArray(grammarIds) && grammarIds.length > 0) {
+      // 선택된 ID만 사용
+      grammarQuery = grammarQuery.in('id', grammarIds)
+    } else {
+      // 기존 방식: include_in_print = true
+      grammarQuery = grammarQuery.eq('include_in_print', true)
+    }
+
+    const { data: grammarList } = await grammarQuery.order('created_at')
 
     if (grammarList?.length) {
       const selected = shuffle(grammarList).slice(0, 5)
