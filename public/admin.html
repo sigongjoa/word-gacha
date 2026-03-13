@@ -236,6 +236,7 @@
   <div class="print-actions">
     <button class="btn btn-pdf" id="printSingleBtn">📄 시험지 생성</button>
     <button class="btn btn-zip" id="printBulkBtn">📦 일괄 시험지 생성</button>
+    <a href="print.html" target="_blank" class="btn btn-primary" id="printOpenBtn" style="display:none;text-decoration:none;">🖨️ 시험지 열기</a>
   </div>
 </div>
 
@@ -522,15 +523,24 @@ function toast(msg, type = 'ok', duration = 3000) {
 async function runPrint(ids, inc) {
   const btn1 = document.getElementById('printSingleBtn');
   const btn2 = document.getElementById('printBulkBtn');
+  const openBtn = document.getElementById('printOpenBtn');
   btn1.disabled = btn2.disabled = true;
   btn1.textContent = btn2.textContent = '⏳ AI 생성 중...';
-  toast('AI가 문제를 생성하고 있습니다. 20~40초 소요됩니다.', 'info', 40000);
+  openBtn.style.display = 'none';
+  toast('AI가 문제를 생성하고 있습니다. 20~40초 소요됩니다.', 'info', 45000);
   try {
     const result = await API.generatePrint(ids, inc);
     if (!result.jobs?.length) { toast('승인된 단어가 있는 학생이 없습니다', 'err'); return; }
-    sessionStorage.setItem('printJob', JSON.stringify(result));
-    window.open('print.html', '_blank');
-    toast(`시험지 생성 완료! (${result.jobs.length}명)`, 'ok');
+    // localStorage: 탭 간 공유 가능
+    localStorage.setItem('printJob', JSON.stringify(result));
+    const win = window.open('print.html', '_blank');
+    if (win) {
+      toast(`시험지 생성 완료! (${result.jobs.length}명)`, 'ok');
+    } else {
+      // 팝업 차단 시 버튼으로 대체
+      toast('팝업이 차단됐습니다. 아래 버튼을 클릭하세요.', 'err', 8000);
+      openBtn.style.display = 'inline-block';
+    }
   } catch(e) {
     toast(e.message || '생성 실패', 'err');
   } finally {
