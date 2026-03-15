@@ -72,6 +72,57 @@
   .btn-delete-q:hover { background: #feb2b2; }
 
   .divider { height: 1px; background: #e2e8f0; margin: 20px 0; }
+
+  /* ── 교재 단어 탭 ─────────────────────────────────── */
+  .unit-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .unit-btn { padding: 7px 16px; border-radius: 20px; border: 2px solid #e2e8f0; background: #fff;
+              font-size: .85rem; font-weight: 600; color: #718096; cursor: pointer; transition: all .18s; }
+  .unit-btn.active { border-color: #667eea; background: #667eea; color: #fff; }
+  .unit-btn:hover:not(.active) { border-color: #667eea; color: #667eea; }
+
+  .tb-card { background: #fff; border-radius: 16px; padding: 22px 20px; box-shadow: 0 2px 14px rgba(0,0,0,.07);
+             margin-bottom: 12px; border-left: 4px solid #667eea; }
+  .tb-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .tb-unit-tag { font-size: .72rem; font-weight: 700; background: #ebf4ff; color: #2b6cb0;
+                 padding: 3px 9px; border-radius: 20px; }
+  .tb-pos-tag  { font-size: .72rem; font-weight: 600; background: #f0fff4; color: #276749;
+                 padding: 3px 9px; border-radius: 20px; }
+  .tb-english  { font-size: 1.3rem; font-weight: 800; color: #2d3748; margin-bottom: 4px; }
+  .tb-korean   { font-size: 1rem; color: #4a5568; margin-bottom: 10px; }
+  .tb-example  { font-size: .82rem; color: #718096; line-height: 1.6; background: #f7fafc;
+                 padding: 9px 12px; border-radius: 8px; margin-bottom: 14px; font-style: italic; }
+  .tb-actions  { display: flex; gap: 10px; }
+  .btn-know    { flex: 1; padding: 11px; border-radius: 10px; border: 2px solid #68d391; background: #f0fff4;
+                 color: #276749; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .18s; }
+  .btn-know:hover    { background: #68d391; color: #fff; }
+  .btn-dontknow      { flex: 1; padding: 11px; border-radius: 10px; border: 2px solid #fc8181; background: #fff5f5;
+                       color: #c53030; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .18s; }
+  .btn-dontknow:hover { background: #fc8181; color: #fff; }
+  .btn-added   { flex: 1; padding: 11px; border-radius: 10px; border: 2px solid #cbd5e0; background: #f7fafc;
+                 color: #a0aec0; font-weight: 700; font-size: .9rem; cursor: default; }
+
+  .tb-progress { background: #f7fafc; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+                 display: flex; align-items: center; gap: 12px; }
+  .tb-progress-text { font-size: .85rem; color: #4a5568; flex: 1; }
+  .tb-progress-text strong { color: #667eea; }
+  .tb-reload-btn { padding: 7px 14px; border-radius: 8px; border: none; background: #667eea; color: #fff;
+                   font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .tb-reload-btn:hover { background: #5a67d8; }
+
+  .tb-grammar-card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 1px 8px rgba(0,0,0,.06);
+                     margin-bottom: 10px; border-left: 4px solid #9f7aea; }
+  .tb-grammar-point { font-size: .8rem; font-weight: 700; color: #6b46c1; background: #faf5ff;
+                      padding: 3px 9px; border-radius: 20px; display: inline-block; margin-bottom: 8px; }
+  .tb-grammar-q { font-weight: 700; color: #2d3748; font-size: .9rem; margin-bottom: 6px; }
+  .tb-grammar-pattern { font-size: .8rem; color: #718096; background: #f7fafc; padding: 6px 10px;
+                        border-radius: 6px; font-family: monospace; margin-bottom: 8px; }
+  .tb-grammar-sentence { font-size: .85rem; color: #4a5568; font-style: italic; margin-bottom: 8px;
+                         padding: 8px 12px; background: #fffaf0; border-radius: 6px; }
+  .tb-grammar-toggle { font-size: .78rem; color: #667eea; cursor: pointer; font-weight: 600;
+                       border: none; background: none; padding: 0; text-decoration: underline; }
+  .tb-grammar-answer { display: none; margin-top: 8px; padding: 10px 12px; background: #f0fff4;
+                       border-radius: 8px; font-size: .85rem; color: #276749; line-height: 1.6; }
+  .tb-grammar-explanation { font-size: .82rem; color: #718096; line-height: 1.6; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -83,6 +134,7 @@
   </div>
   <div class="tabs">
     <div class="tab active" data-tab="words">📚 단어장</div>
+    <div class="tab" data-tab="textbook">📖 교재 단어</div>
     <div class="tab" data-tab="grammar">❓ 문법 질문</div>
   </div>
 </header>
@@ -105,6 +157,31 @@
 
     <p class="section-title">내 단어 목록</p>
     <div id="wordList"><div class="empty-words">단어를 추가해보세요 📝</div></div>
+  </div>
+
+  <!-- ── 교재 단어 탭 ──────────────────────────── -->
+  <div class="tab-content" id="tab-textbook">
+    <!-- Unit 선택 -->
+    <div class="unit-selector">
+      <button class="unit-btn active" data-unit="">전체</button>
+      <button class="unit-btn" data-unit="1">Unit 1</button>
+      <button class="unit-btn" data-unit="2">Unit 2</button>
+      <button class="unit-btn" data-unit="3">Unit 3</button>
+      <button class="unit-btn" data-unit="4">Unit 4</button>
+    </div>
+
+    <!-- 진행 상황 + 새로고침 -->
+    <div class="tb-progress">
+      <div class="tb-progress-text" id="tbProgressText">교재 단어를 불러오는 중...</div>
+      <button class="tb-reload-btn" id="tbReloadBtn">🔄 새 단어</button>
+    </div>
+
+    <!-- 추천 단어 목록 -->
+    <div id="tbWordList"><div class="empty-words">불러오는 중... ⏳</div></div>
+
+    <div class="divider"></div>
+    <p class="section-title">교재 핵심 문법</p>
+    <div id="tbGrammarList"><div class="empty-words">불러오는 중... ⏳</div></div>
   </div>
 
   <!-- ── 문법 질문 탭 ──────────────────────────── -->
@@ -158,7 +235,8 @@
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      if (tab.dataset.tab === 'grammar') loadGrammar();
+      if (tab.dataset.tab === 'grammar')  loadGrammar();
+      if (tab.dataset.tab === 'textbook') loadTextbook();
     };
   });
 
@@ -268,6 +346,119 @@
   }
 
   document.getElementById('addGrammarBtn').onclick = addGrammarQuestion;
+
+  // ── 교재 단어 ─────────────────────────────────────────────
+  let currentUnit = '';  // '' = 전체
+  let addedWordIds = new Set();  // 이미 단어장에 추가한 교재 단어 ID 세트
+
+  // Unit 버튼 클릭
+  document.querySelectorAll('.unit-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentUnit = btn.dataset.unit;
+      loadTextbook();
+    };
+  });
+
+  document.getElementById('tbReloadBtn').onclick = loadTextbook;
+
+  async function loadTextbook() {
+    document.getElementById('tbWordList').innerHTML    = '<div class="empty-words">불러오는 중... ⏳</div>';
+    document.getElementById('tbGrammarList').innerHTML = '<div class="empty-words">불러오는 중... ⏳</div>';
+    document.getElementById('tbProgressText').textContent = '교재 단어를 불러오는 중...';
+    addedWordIds = new Set();
+    try {
+      const [daily, grammar] = await Promise.all([
+        API.getTextbookDaily(studentId, currentUnit),
+        API.getTextbookGrammar(currentUnit),
+      ]);
+      renderTbWords(daily);
+      renderTbGrammar(grammar);
+    } catch (e) {
+      document.getElementById('tbWordList').innerHTML = `<div class="empty-words">불러오기 실패: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderTbWords(words) {
+    const el = document.getElementById('tbWordList');
+    const prog = document.getElementById('tbProgressText');
+    if (!words.length) {
+      el.innerHTML = '<div class="empty-words">🎉 이 Unit의 모든 단어를 이미 알고 있어요!</div>';
+      prog.innerHTML = '모든 단어 완료! <strong>완벽해요 🎉</strong>';
+      return;
+    }
+    prog.innerHTML = `교재 추천 단어 <strong>${words.length}개</strong> — 모르는 단어를 단어장에 추가하세요`;
+    el.innerHTML = words.map(w => `
+      <div class="tb-card" id="tbcard_${w.id}">
+        <div class="tb-card-header">
+          <span class="tb-unit-tag">Unit ${w.unit}</span>
+          <span class="tb-pos-tag">${esc(w.part_of_speech)}</span>
+        </div>
+        <div class="tb-english">${esc(w.english)}</div>
+        <div class="tb-korean">${esc(w.korean)}</div>
+        <div class="tb-example">"${esc(w.example)}"</div>
+        <div class="tb-actions">
+          <button class="btn-know" onclick="tbKnow('${w.id}')">✅ 알아요</button>
+          <button class="btn-dontknow" onclick="tbDontKnow('${w.id}', '${esc(w.english)}', '${esc(w.korean)}')">📌 몰라요 → 단어장 추가</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderTbGrammar(grammar) {
+    const el = document.getElementById('tbGrammarList');
+    if (!grammar.length) { el.innerHTML = '<div class="empty-words">등록된 문법이 없어요</div>'; return; }
+    el.innerHTML = grammar.map(g => `
+      <div class="tb-grammar-card">
+        <span class="tb-grammar-point">📐 ${esc(g.grammar_point)}</span>
+        <div class="tb-grammar-sentence">${esc(g.sentence)}</div>
+        <div class="tb-grammar-explanation">${esc(g.explanation)}</div>
+        <div class="tb-grammar-pattern">패턴: ${esc(g.key_pattern)}</div>
+        <div class="tb-grammar-q">Q. ${esc(g.question)}</div>
+        <button class="tb-grammar-toggle" onclick="toggleGrammarAnswer(this)">▶ 정답 보기</button>
+        <div class="tb-grammar-answer">A. ${esc(g.answer)}</div>
+      </div>
+    `).join('');
+  }
+
+  function toggleGrammarAnswer(btn) {
+    const answerEl = btn.nextElementSibling;
+    const isOpen = answerEl.style.display === 'block';
+    answerEl.style.display = isOpen ? 'none' : 'block';
+    btn.textContent = isOpen ? '▶ 정답 보기' : '▼ 정답 숨기기';
+  }
+
+  function tbKnow(wordId) {
+    const card = document.getElementById('tbcard_' + wordId);
+    if (!card) return;
+    card.style.opacity = '0.4';
+    card.style.transition = 'opacity .3s';
+    setTimeout(() => { card.style.display = 'none'; }, 300);
+  }
+
+  async function tbDontKnow(wordId, english, korean) {
+    const card = document.getElementById('tbcard_' + wordId);
+    if (!card || addedWordIds.has(wordId)) return;
+    const btn = card.querySelector('.btn-dontknow');
+    btn.disabled = true; btn.textContent = '추가 중...';
+    try {
+      await API.addTextbookWordToMyList(wordId, studentId);
+      addedWordIds.add(wordId);
+      card.querySelector('.tb-actions').innerHTML =
+        '<button class="btn-added">✅ 단어장에 추가됨</button>';
+      loadWords(); // 내 단어 목록도 갱신
+    } catch (e) {
+      if (e.message.includes('이미')) {
+        addedWordIds.add(wordId);
+        card.querySelector('.tb-actions').innerHTML =
+          '<button class="btn-added">✅ 이미 단어장에 있음</button>';
+      } else {
+        btn.disabled = false; btn.textContent = '📌 몰라요 → 단어장 추가';
+        alert('추가 실패: ' + e.message);
+      }
+    }
+  }
 
   // 초기 로드
   loadWords();

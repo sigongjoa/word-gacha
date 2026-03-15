@@ -75,6 +75,20 @@ const API = {
   async deleteGrammarQuestion(id, studentId) {
     return this._fetch(`/grammar/${id}?student_id=${encodeURIComponent(studentId)}`, { method: 'DELETE' })
   },
+
+  // 교재 단어 (미래엔 공통영어 1)
+  async getTextbookWords(unit)         { return this._fetch(`/textbook/words${unit ? `?unit=${unit}` : ''}`) },
+  async getTextbookDaily(studentId, unit) {
+    const params = new URLSearchParams()
+    if (studentId) params.set('student_id', studentId)
+    if (unit) params.set('unit', unit)
+    return this._fetch(`/textbook/daily?${params}`)
+  },
+  async addTextbookWordToMyList(wordId, studentId) {
+    return this._fetch(`/textbook/words/${wordId}/add`, { method: 'POST', body: JSON.stringify({ student_id: studentId }) })
+  },
+  async getTextbookGrammar(unit)       { return this._fetch(`/textbook/grammar${unit ? `?unit=${unit}` : ''}`) },
+  async getTextbookInfo()              { return this._fetch('/textbook/info') },
 }
 
 function downloadBlob(blob, filename) {
