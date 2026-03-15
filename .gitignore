@@ -6,3 +6,8 @@ print/tmp/
 data.json
 server.log
 supabase/.temp/
+
+# 교재 저작권 관련 — 출판사 원문/파싱본은 로컬에서만 사용
+textbook_pdf/
+KakaoTalk_*.png
+KakaoTalk_*.jpg
