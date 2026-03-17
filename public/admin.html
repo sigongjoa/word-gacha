@@ -160,6 +160,7 @@
   <div class="tab" data-tab="grammar">📚 문법 Q&amp;A</div>
   <div class="tab" data-tab="print">🖨️ 프린트</div>
   <div class="tab" data-tab="students">👤 학생 관리</div>
+  <div class="tab" data-tab="textbook-viewer">📖 교재 데이터</div>
 </div>
 
 <!-- ═══════════════════════════════════════════
@@ -334,6 +335,60 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════
+     TAB 7: 교재 데이터
+═══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-textbook-viewer">
+  <div class="card">
+    <h2>교재 선택</h2>
+    <div class="row" style="flex-wrap:wrap;gap:8px;">
+      <select id="tbvSchool" style="flex:1;min-width:130px;">
+        <option value="">학교 선택</option>
+      </select>
+      <select id="tbvGrade" style="width:80px;">
+        <option value="">학년</option>
+        <option value="1">고1</option>
+        <option value="2">고2</option>
+      </select>
+      <select id="tbvSemester" style="width:90px;">
+        <option value="semester1">1학기</option>
+        <option value="semester2">2학기</option>
+      </select>
+      <button class="btn btn-primary" id="tbvLoadBtn">불러오기</button>
+    </div>
+    <div id="tbvTextbookInfo" style="margin-top:10px;font-size:.85rem;color:#667eea;font-weight:600;"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h2 style="margin:0;">단어 목록</h2>
+      <div id="tbvUnitBtns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <span id="tbvWordCount" style="margin-left:auto;font-size:.85rem;color:#888;"></span>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px;">
+      <table id="tbvWordTable" style="width:100%;border-collapse:collapse;font-size:.87rem;">
+        <thead>
+          <tr style="background:#f7fafc;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">Unit</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">영어</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">한국어</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">품사</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e2e8f0;">예문</th>
+          </tr>
+        </thead>
+        <tbody id="tbvWordBody"><tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;">교재를 선택해주세요</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>문법 포인트</h2>
+    <div id="tbvGrammarList" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="text-align:center;color:#aaa;padding:20px;">교재를 선택해주세요</div>
+    </div>
+  </div>
+</div>
+
 <script src="js/config.js?v=2"></script>
 <script src="js/api.js?v=2"></script>
 <script>
@@ -376,6 +431,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'grammar')           loadGrammar();
     if (tab.dataset.tab === 'print')             loadPrintTab();
     if (tab.dataset.tab === 'students')          loadStudents();
+    if (tab.dataset.tab === 'textbook-viewer')   { /* 불러오기 버튼으로 수동 로드 */ }
   };
 });
 
@@ -911,17 +967,7 @@ async function loadStudents() {
   `}).join('');
 }
 
-// 학교 목록 로드
-(async () => {
-  try {
-    const data = await API._fetch('/schools');
-    const sel = document.getElementById('newStudentSchool');
-    Object.entries(data.schools).forEach(([key, s]) => {
-      sel.innerHTML += `<option value="${key}">${s.name}</option>`;
-    });
-    window._schoolsData = data;
-  } catch(e) { console.warn('학교 로드 실패', e); }
-})();
+// 학교 목록 로드 → 교재 뷰어 섹션 하단에서 통합 처리
 
 document.getElementById('addStudentBtn').onclick = async () => {
   const name   = document.getElementById('newStudentName').value.trim();
@@ -986,6 +1032,117 @@ async function deleteStudent(id) {
 
 // ──── 초기 로드 ──────────────────────────────────────────────
 loadWords();
+
+// ══════════════════════════════════════════════════════════════
+// 교재 데이터 뷰어
+// ══════════════════════════════════════════════════════════════
+let _tbvSchools = null;
+let _tbvCurrentId = null;
+let _tbvCurrentUnit = '';
+
+// 학교 목록 로드 (schools 드롭다운 공통)
+(async () => {
+  try {
+    const data = await API._fetch('/schools');
+    _tbvSchools = data;
+    const selStudent = document.getElementById('newStudentSchool');
+    const selViewer  = document.getElementById('tbvSchool');
+    Object.entries(data.schools).forEach(([key, s]) => {
+      selStudent.innerHTML += `<option value="${key}">${s.name}</option>`;
+      selViewer.innerHTML  += `<option value="${key}">${s.name}</option>`;
+    });
+    window._schoolsData = data;
+  } catch(e) { console.warn('학교 로드 실패', e); }
+})();
+
+document.getElementById('tbvLoadBtn').onclick = async () => {
+  const school   = document.getElementById('tbvSchool').value;
+  const grade    = document.getElementById('tbvGrade').value;
+  const semester = document.getElementById('tbvSemester').value;
+  if (!school || !grade) return alert('학교와 학년을 선택해주세요');
+
+  const schoolData = _tbvSchools?.schools[school];
+  if (!schoolData) return alert('학교 정보를 찾을 수 없습니다');
+  const textbookId = schoolData.textbooks[grade]?.[semester];
+  if (!textbookId) return alert('해당 학기 교재 데이터가 없습니다');
+
+  _tbvCurrentId   = textbookId;
+  _tbvCurrentUnit = '';
+
+  const label = _tbvSchools.textbook_labels?.[textbookId] || textbookId;
+  document.getElementById('tbvTextbookInfo').textContent = `📚 ${label}`;
+  await tbvLoadData();
+};
+
+async function tbvLoadData() {
+  if (!_tbvCurrentId) return;
+  document.getElementById('tbvWordBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;">불러오는 중...</td></tr>';
+  document.getElementById('tbvGrammarList').innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;">불러오는 중...</div>';
+
+  try {
+    const unit = _tbvCurrentUnit || null;
+    const [wData, gData] = await Promise.all([
+      API.getTextbookWords(_tbvCurrentId, unit),
+      API.getTextbookGrammar(_tbvCurrentId, unit),
+    ]);
+
+    // Unit 버튼 생성 (처음 로드 시에만)
+    if (!_tbvCurrentUnit) {
+      const total = wData.textbook_info?.total_units || 4;
+      const lessonInfo = wData.lesson_info || {};
+      let btns = '<button class="unit-btn active" onclick="tbvSelectUnit(\'\', this)">전체</button>';
+      for (let i = 1; i <= total; i++) {
+        const title = lessonInfo[i]?.title || `Unit ${i}`;
+        btns += `<button class="unit-btn" onclick="tbvSelectUnit('${i}', this)" title="${esc(title)}">L${i}</button>`;
+      }
+      document.getElementById('tbvUnitBtns').innerHTML = btns;
+    }
+
+    // 단어 테이블
+    const words = wData.words || [];
+    document.getElementById('tbvWordCount').textContent = `총 ${words.length}개`;
+    if (!words.length) {
+      document.getElementById('tbvWordBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#aaa;">단어가 없습니다</td></tr>';
+    } else {
+      document.getElementById('tbvWordBody').innerHTML = words.map(w => `
+        <tr style="border-bottom:1px solid #f0f4ff;">
+          <td style="padding:7px 8px;color:#667eea;font-weight:600;">L${w.unit}</td>
+          <td style="padding:7px 8px;font-weight:600;">${esc(w.english)}</td>
+          <td style="padding:7px 8px;color:#4a5568;">${esc(w.korean)}</td>
+          <td style="padding:7px 8px;"><span style="background:#ebf4ff;color:#2b6cb0;border-radius:4px;padding:1px 6px;font-size:.78rem;">${esc(w.part_of_speech)}</span></td>
+          <td style="padding:7px 8px;color:#718096;font-size:.83rem;font-style:italic;">${esc(w.example || '')}</td>
+        </tr>`).join('');
+    }
+
+    // 문법 카드
+    const grammar = gData.grammar || [];
+    if (!grammar.length) {
+      document.getElementById('tbvGrammarList').innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;">문법이 없습니다</div>';
+    } else {
+      document.getElementById('tbvGrammarList').innerHTML = grammar.map(g => `
+        <div style="background:#f7fafc;border-radius:10px;padding:14px;border-left:4px solid #667eea;">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+            <span style="background:#ebf4ff;color:#2b6cb0;border-radius:4px;padding:1px 8px;font-size:.78rem;font-weight:700;">L${g.unit}</span>
+            <strong style="color:#2d3748;">📐 ${esc(g.grammar_point)}</strong>
+          </div>
+          <div style="font-style:italic;color:#4a5568;margin-bottom:4px;">"${esc(g.sentence)}"</div>
+          <div style="font-size:.85rem;color:#718096;margin-bottom:4px;">${esc(g.explanation)}</div>
+          <div style="font-size:.83rem;background:#e6fffa;color:#234e52;border-radius:4px;padding:4px 8px;margin-bottom:4px;">패턴: ${esc(g.key_pattern)}</div>
+          <div style="font-size:.83rem;color:#553c9a;">Q. ${esc(g.question)}</div>
+          <div style="font-size:.83rem;color:#276749;margin-top:2px;">A. ${esc(g.answer)}</div>
+        </div>`).join('');
+    }
+  } catch(e) {
+    document.getElementById('tbvWordBody').innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#e53e3e;">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function tbvSelectUnit(unit, btn) {
+  document.querySelectorAll('#tbvUnitBtns .unit-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _tbvCurrentUnit = unit;
+  tbvLoadData();
+}
 </script>
 </body>
 </html>
