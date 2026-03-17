@@ -161,13 +161,12 @@
 
   <!-- ── 교재 단어 탭 ──────────────────────────── -->
   <div class="tab-content" id="tab-textbook">
-    <!-- Unit 선택 -->
-    <div class="unit-selector">
+    <!-- 교재 정보 헤더 -->
+    <div id="tbInfoHeader" style="background:#f0f4ff;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:.88rem;color:#3b4a7a;display:none;"></div>
+
+    <!-- Unit 선택 (동적으로 채워짐) -->
+    <div class="unit-selector" id="unitSelector">
       <button class="unit-btn active" data-unit="">전체</button>
-      <button class="unit-btn" data-unit="1">Unit 1</button>
-      <button class="unit-btn" data-unit="2">Unit 2</button>
-      <button class="unit-btn" data-unit="3">Unit 3</button>
-      <button class="unit-btn" data-unit="4">Unit 4</button>
     </div>
 
     <!-- 진행 상황 + 새로고침 -->
@@ -348,33 +347,81 @@
   document.getElementById('addGrammarBtn').onclick = addGrammarQuestion;
 
   // ── 교재 단어 ─────────────────────────────────────────────
-  let currentUnit = '';  // '' = 전체
-  let addedWordIds = new Set();  // 이미 단어장에 추가한 교재 단어 ID 세트
+  let currentUnit = '';   // '' = 전체
+  let currentTextbookId = null;
+  let tbLessonInfo = {};
+  let addedWordIds = new Set();
 
-  // Unit 버튼 클릭
-  document.querySelectorAll('.unit-btn').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentUnit = btn.dataset.unit;
-      loadTextbook();
-    };
-  });
+  // Unit 버튼 클릭 핸들러 (동적 버튼용)
+  function bindUnitBtns() {
+    document.querySelectorAll('.unit-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentUnit = btn.dataset.unit;
+        loadTbContent();
+      };
+    });
+  }
 
-  document.getElementById('tbReloadBtn').onclick = loadTextbook;
+  document.getElementById('tbReloadBtn').onclick = loadTbContent;
 
   async function loadTextbook() {
+    if (currentTextbookId) { loadTbContent(); return; }  // 이미 교재 확인됨
+
+    document.getElementById('tbWordList').innerHTML    = '<div class="empty-words">불러오는 중... ⏳</div>';
+    document.getElementById('tbGrammarList').innerHTML = '<div class="empty-words">불러오는 중... ⏳</div>';
+    document.getElementById('tbProgressText').textContent = '교재 정보를 확인하는 중...';
+    addedWordIds = new Set();
+
+    try {
+      const info = await API.getStudentTextbook(studentId);
+      if (!info.textbook_id) {
+        document.getElementById('tbWordList').innerHTML = `<div class="empty-words">📚 ${esc(info.message || '학교/학년을 설정해 주세요')}<br><small>선생님께 문의하세요</small></div>`;
+        document.getElementById('tbGrammarList').innerHTML = '';
+        document.getElementById('tbProgressText').textContent = '교재 미설정';
+        return;
+      }
+      currentTextbookId = info.textbook_id;
+      tbLessonInfo = info.lesson_info || {};
+
+      // 헤더 표시
+      const header = document.getElementById('tbInfoHeader');
+      header.style.display = 'block';
+      header.innerHTML = `📚 <strong>${esc(info.textbook_info?.publisher || '')} ${esc(info.textbook_info?.author || '')}</strong> ${esc(info.textbook_info?.title || info.textbook_id)} &nbsp;|&nbsp; ${info.school || ''} 고${info.grade || '?'}`;
+
+      // Unit 버튼 동적 생성
+      const sel = document.getElementById('unitSelector');
+      sel.innerHTML = `<button class="unit-btn active" data-unit="">전체</button>`;
+      const total = info.textbook_info?.total_units || 4;
+      for (let i = 1; i <= total; i++) {
+        const lessonTitle = tbLessonInfo[i]?.title || `Unit ${i}`;
+        sel.innerHTML += `<button class="unit-btn" data-unit="${i}">L${i}</button>`;
+      }
+      bindUnitBtns();
+
+      loadTbContent();
+    } catch (e) {
+      document.getElementById('tbWordList').innerHTML = `<div class="empty-words">불러오기 실패: ${esc(e.message)}</div>`;
+    }
+  }
+
+  async function loadTbContent() {
+    if (!currentTextbookId) return;
     document.getElementById('tbWordList').innerHTML    = '<div class="empty-words">불러오는 중... ⏳</div>';
     document.getElementById('tbGrammarList').innerHTML = '<div class="empty-words">불러오는 중... ⏳</div>';
     document.getElementById('tbProgressText').textContent = '교재 단어를 불러오는 중...';
     addedWordIds = new Set();
     try {
-      const [daily, grammar] = await Promise.all([
-        API.getTextbookDaily(studentId, currentUnit),
-        API.getTextbookGrammar(currentUnit),
+      const [wordsData, grammarData] = await Promise.all([
+        API.getTextbookWords(currentTextbookId, currentUnit || null),
+        API.getTextbookGrammar(currentTextbookId, currentUnit || null),
       ]);
-      renderTbWords(daily);
-      renderTbGrammar(grammar);
+      // 랜덤 30개 셔플
+      const allWords = wordsData.words || [];
+      const shuffled = allWords.sort(() => Math.random() - 0.5).slice(0, 30);
+      renderTbWords(shuffled);
+      renderTbGrammar(grammarData.grammar || []);
     } catch (e) {
       document.getElementById('tbWordList').innerHTML = `<div class="empty-words">불러오기 실패: ${esc(e.message)}</div>`;
     }
@@ -443,13 +490,16 @@
     const btn = card.querySelector('.btn-dontknow');
     btn.disabled = true; btn.textContent = '추가 중...';
     try {
-      await API.addTextbookWordToMyList(wordId, studentId);
+      await API._fetch(`/students/${studentId}/words`, {
+        method: 'POST',
+        body: JSON.stringify({ english, korean, blank_type: 'korean' }),
+      });
       addedWordIds.add(wordId);
       card.querySelector('.tb-actions').innerHTML =
         '<button class="btn-added">✅ 단어장에 추가됨</button>';
-      loadWords(); // 내 단어 목록도 갱신
+      loadWords();
     } catch (e) {
-      if (e.message.includes('이미')) {
+      if (e.message.includes('이미') || e.message.includes('duplicate')) {
         addedWordIds.add(wordId);
         card.querySelector('.tb-actions').innerHTML =
           '<button class="btn-added">✅ 이미 단어장에 있음</button>';

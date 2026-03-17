@@ -33,11 +33,11 @@ const API = {
   },
 
   // 학생
-  async getStudents()           { return this._fetch('/students') },
-  async getStudent(id)          { return this._fetch(`/students/${id}`) },
-  async addStudent(name)        { return this._fetch('/students', { method: 'POST', body: JSON.stringify({ name }) }) },
-  async updateStudent(id, name) { return this._fetch(`/students/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }) },
-  async deleteStudent(id)       { return this._fetch(`/students/${id}`, { method: 'DELETE' }) },
+  async getStudents()                   { return this._fetch('/students') },
+  async getStudent(id)                  { return this._fetch(`/students/${id}`) },
+  async addStudent(name, school, grade) { return this._fetch('/students', { method: 'POST', body: JSON.stringify({ name, school, grade }) }) },
+  async updateStudent(id, updates)      { return this._fetch(`/students/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }) },
+  async deleteStudent(id)               { return this._fetch(`/students/${id}`, { method: 'DELETE' }) },
 
   // 단어 (학생)
   async getMyWords(studentId)         { return this._fetch(`/words?student_id=${studentId}`) },
@@ -76,19 +76,15 @@ const API = {
     return this._fetch(`/grammar/${id}?student_id=${encodeURIComponent(studentId)}`, { method: 'DELETE' })
   },
 
-  // 교재 단어 (미래엔 공통영어 1)
-  async getTextbookWords(unit)         { return this._fetch(`/textbook/words${unit ? `?unit=${unit}` : ''}`) },
-  async getTextbookDaily(studentId, unit) {
-    const params = new URLSearchParams()
-    if (studentId) params.set('student_id', studentId)
-    if (unit) params.set('unit', unit)
-    return this._fetch(`/textbook/daily?${params}`)
-  },
-  async addTextbookWordToMyList(wordId, studentId) {
-    return this._fetch(`/textbook/words/${wordId}/add`, { method: 'POST', body: JSON.stringify({ student_id: studentId }) })
-  },
-  async getTextbookGrammar(unit)       { return this._fetch(`/textbook/grammar${unit ? `?unit=${unit}` : ''}`) },
-  async getTextbookInfo()              { return this._fetch('/textbook/info') },
+  // 학교 목록
+  async getSchools() { return this._fetch('/schools') },
+
+  // 학생의 현재 교재 조회
+  async getStudentTextbook(studentId) { return this._fetch(`/students/${studentId}/textbook`) },
+
+  // 교재 단어/문법 (textbookId 기반)
+  async getTextbookWords(textbookId, unit)   { return this._fetch(`/textbook/${textbookId}/words${unit ? `?unit=${unit}` : ''}`) },
+  async getTextbookGrammar(textbookId, unit) { return this._fetch(`/textbook/${textbookId}/grammar${unit ? `?unit=${unit}` : ''}`) },
 }
 
 function downloadBlob(blob, filename) {

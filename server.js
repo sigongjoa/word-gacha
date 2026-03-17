@@ -25,6 +25,10 @@ if (USE_SUPABASE) {
   console.log('📁 로컬 JSON 모드 (Supabase 키 없음)');
 }
 
+// ── 교재 데이터 경로 ───────────────────────────────────────────────
+const TEXTBOOKS_DIR = path.join(__dirname, 'textbook_pdf', 'textbooks');
+const SCHOOLS_FILE  = path.join(TEXTBOOKS_DIR, 'schools.json');
+
 // ── 로컬 JSON DB ───────────────────────────────────────────────────
 const DATA_FILE = path.join(__dirname, 'data.json');
 
@@ -64,28 +68,29 @@ const DB = {
     if (!s) throw new Error('학생을 찾을 수 없습니다');
     return s;
   },
-  async addStudent(name) {
+  async addStudent(name, school, grade) {
     if (USE_SUPABASE) {
-      const { data, error } = await supabase.from('students').insert({ name }).select().single();
+      const { data, error } = await supabase.from('students')
+        .insert({ name, school: school || null, grade: grade || null }).select().single();
       if (error) throw new Error('이미 존재하는 이름이거나 오류가 발생했습니다');
       return data;
     }
     const d = loadData();
     if (d.students.find(s => s.name === name)) throw new Error('이미 존재하는 이름입니다');
-    const s = { id: newId(), name, created_at: now() };
+    const s = { id: newId(), name, school: school || null, grade: grade || null, created_at: now() };
     d.students.push(s); saveData(d); return s;
   },
-  async updateStudent(id, name) {
+  async updateStudent(id, updates) {
     if (USE_SUPABASE) {
-      const { data, error } = await supabase.from('students').update({ name }).eq('id', id).select().single();
+      const { data, error } = await supabase.from('students').update(updates).eq('id', id).select().single();
       if (error) throw new Error(error.message);
       return data;
     }
     const d = loadData();
     const s = d.students.find(s => s.id === id);
     if (!s) throw new Error('학생을 찾을 수 없습니다');
-    if (d.students.find(s2 => s2.id !== id && s2.name === name)) throw new Error('이미 존재하는 이름입니다');
-    s.name = name; saveData(d); return s;
+    if (updates.name && d.students.find(s2 => s2.id !== id && s2.name === updates.name)) throw new Error('이미 존재하는 이름입니다');
+    Object.assign(s, updates); saveData(d); return s;
   },
   async deleteStudent(id) {
     if (USE_SUPABASE) {
@@ -324,15 +329,19 @@ app.get('/api/students/:id', handle(async (req, res) => {
 }));
 
 app.post('/api/students', requireAdmin, handle(async (req, res) => {
-  const { name } = req.body;
+  const { name, school, grade } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력하세요' });
-  res.json(await DB.addStudent(name.trim()));
+  res.json(await DB.addStudent(name.trim(), school || null, grade ? Number(grade) : null));
 }));
 
 app.patch('/api/students/:id', requireAdmin, handle(async (req, res) => {
-  const { name } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: '이름을 입력하세요' });
-  res.json(await DB.updateStudent(req.params.id, name.trim()));
+  const allowed = ['name', 'school', 'grade'];
+  const updates = {};
+  allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+  if (updates.name !== undefined && !updates.name.trim()) return res.status(400).json({ error: '이름을 입력하세요' });
+  if (updates.name) updates.name = updates.name.trim();
+  if (updates.grade) updates.grade = Number(updates.grade);
+  res.json(await DB.updateStudent(req.params.id, updates));
 }));
 
 app.delete('/api/students/:id', requireAdmin, handle(async (req, res) => {
@@ -577,6 +586,78 @@ app.post('/api/print/bulk', requireAdmin, handle(async (req, res) => {
     } catch (e) { console.error(`PDF 실패:`, e.message); }
   }
   zip.finalize();
+}));
+
+// ============================================================
+// 교재 API
+// ============================================================
+
+// 학교 목록 + 교재 매핑
+app.get('/api/schools', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(SCHOOLS_FILE, 'utf8'));
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: '학교 데이터를 불러올 수 없습니다' });
+  }
+});
+
+// 특정 교재 단어 목록
+app.get('/api/textbook/:textbookId/words', handle(async (req, res) => {
+  const { textbookId } = req.params;
+  const unit = req.query.unit ? Number(req.query.unit) : null;
+  const file = path.join(TEXTBOOKS_DIR, `${textbookId}.json`);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: '교재 데이터가 없습니다' });
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let words = data.textbook_words || [];
+  if (unit) words = words.filter(w => w.unit === unit);
+  res.json({ textbook_info: data.textbook_info, lesson_info: data.lesson_info, words, stats: data.stats });
+}));
+
+// 특정 교재 문법 목록
+app.get('/api/textbook/:textbookId/grammar', handle(async (req, res) => {
+  const { textbookId } = req.params;
+  const unit = req.query.unit ? Number(req.query.unit) : null;
+  const file = path.join(TEXTBOOKS_DIR, `${textbookId}.json`);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: '교재 데이터가 없습니다' });
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let grammar = data.textbook_grammar || [];
+  if (unit) grammar = grammar.filter(g => g.unit === unit);
+  res.json({ textbook_info: data.textbook_info, lesson_info: data.lesson_info, grammar, stats: data.stats });
+}));
+
+// 학생의 현재 교재 조회 (학교+학년+학기 기반)
+app.get('/api/students/:id/textbook', handle(async (req, res) => {
+  const student = await DB.getStudent(req.params.id);
+  if (!student.school || !student.grade) return res.json({ textbook_id: null, message: '학교/학년이 설정되지 않았습니다' });
+
+  const schools = JSON.parse(fs.readFileSync(SCHOOLS_FILE, 'utf8'));
+  const schoolData = schools.schools[student.school];
+  if (!schoolData) return res.json({ textbook_id: null, message: '등록되지 않은 학교입니다' });
+
+  const gradeData = schoolData.textbooks[String(student.grade)];
+  if (!gradeData) return res.json({ textbook_id: null, message: '해당 학년 교재가 없습니다' });
+
+  // 현재 월 기준 학기 자동 판단 (3~8월 = 1학기, 9~2월 = 2학기)
+  const month = new Date().getMonth() + 1;
+  const semester = (month >= 3 && month <= 8) ? 'semester1' : 'semester2';
+  const textbookId = gradeData[semester];
+
+  if (!textbookId) return res.json({ textbook_id: null, message: '해당 학기 교재가 없습니다' });
+
+  const file = path.join(TEXTBOOKS_DIR, `${textbookId}.json`);
+  if (!fs.existsSync(file)) return res.json({ textbook_id: textbookId, message: '교재 데이터 준비 중입니다' });
+
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  res.json({
+    textbook_id: textbookId,
+    textbook_info: data.textbook_info,
+    lesson_info: data.lesson_info,
+    stats: data.stats,
+    school: schoolData.name,
+    grade: student.grade,
+    semester,
+  });
 }));
 
 // ============================================================

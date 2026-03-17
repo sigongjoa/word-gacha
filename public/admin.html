@@ -312,8 +312,17 @@
 <div class="tab-content" id="tab-students">
   <div class="card">
     <h2>학생 추가</h2>
-    <div class="row">
-      <input type="text" id="newStudentName" placeholder="학생 이름" class="flex1">
+    <div class="row" style="flex-wrap:wrap;gap:6px;">
+      <input type="text" id="newStudentName" placeholder="학생 이름" style="flex:1;min-width:120px;">
+      <select id="newStudentSchool" style="flex:1;min-width:120px;">
+        <option value="">학교 선택</option>
+      </select>
+      <select id="newStudentGrade" style="width:90px;">
+        <option value="">학년</option>
+        <option value="1">고1</option>
+        <option value="2">고2</option>
+        <option value="3">고3</option>
+      </select>
       <button class="btn btn-primary" id="addStudentBtn">추가</button>
     </div>
     <div class="flash" id="studentMsg"></div>
@@ -887,32 +896,86 @@ async function loadStudents() {
   const students = await API.getStudents().catch(() => []);
   const grid = document.getElementById('studentGrid');
   if (!students.length) { grid.innerHTML = '<div class="empty">등록된 학생이 없습니다.</div>'; return; }
-  grid.innerHTML = students.map(s => `
+  grid.innerHTML = students.map(s => {
+    const schoolLabel = s.school ? `${s.school} ` : '';
+    const gradeLabel  = s.grade  ? `고${s.grade} ` : '';
+    const textbookTag = (s.school && s.grade) ? `<span style="font-size:11px;color:#888;display:block;">${schoolLabel}${gradeLabel}</span>` : `<span style="font-size:11px;color:#f59e0b;display:block;">학교 미설정</span>`;
+    return `
     <div class="student-card">
-      <div class="student-name">👤 ${esc(s.name)}</div>
+      <div class="student-name">👤 ${esc(s.name)}${textbookTag}</div>
       <div class="student-actions">
-        <button class="btn btn-sm btn-outline" onclick="renameStudent('${s.id}', '${esc(s.name)}')">수정</button>
+        <button class="btn btn-sm btn-outline" onclick="editStudent('${s.id}', '${esc(s.name)}', '${s.school||''}', '${s.grade||''}')">수정</button>
         <button class="btn btn-sm btn-danger"  onclick="deleteStudent('${s.id}')">삭제</button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
+// 학교 목록 로드
+(async () => {
+  try {
+    const data = await API._fetch('/schools');
+    const sel = document.getElementById('newStudentSchool');
+    Object.entries(data.schools).forEach(([key, s]) => {
+      sel.innerHTML += `<option value="${key}">${s.name}</option>`;
+    });
+    window._schoolsData = data;
+  } catch(e) { console.warn('학교 로드 실패', e); }
+})();
+
 document.getElementById('addStudentBtn').onclick = async () => {
-  const name = document.getElementById('newStudentName').value.trim();
+  const name   = document.getElementById('newStudentName').value.trim();
+  const school = document.getElementById('newStudentSchool').value;
+  const grade  = document.getElementById('newStudentGrade').value;
   if (!name) return flash('studentMsg', '이름을 입력하세요', 'err');
   try {
-    await API.addStudent(name);
+    await API.addStudent(name, school || null, grade ? Number(grade) : null);
     document.getElementById('newStudentName').value = '';
+    document.getElementById('newStudentSchool').value = '';
+    document.getElementById('newStudentGrade').value = '';
     flash('studentMsg', '추가됐습니다', 'ok');
     loadStudents();
   } catch(e) { flash('studentMsg', e.message, 'err'); }
 };
 
-function renameStudent(id, name) {
-  const n = prompt('새 이름:', name.replace(/&quot;/g,'"'));
-  if (!n || !n.trim()) return;
-  API.updateStudent(id, n.trim()).then(() => loadStudents()).catch(e => alert(e.message));
+function editStudent(id, name, school, grade) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  const schoolOptions = window._schoolsData
+    ? Object.entries(window._schoolsData.schools).map(([k,s]) => `<option value="${k}" ${k===school?'selected':''}>${s.name}</option>`).join('')
+    : `<option value="${school}">${school}</option>`;
+  modal.innerHTML = `
+    <div style="background:#1e1e2e;border-radius:12px;padding:24px;min-width:300px;display:flex;flex-direction:column;gap:12px;">
+      <h3 style="margin:0;color:#cdd6f4;">학생 정보 수정</h3>
+      <input id="editName" type="text" value="${name.replace(/&quot;/g,'"')}" placeholder="이름" style="padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
+      <select id="editSchool" style="padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
+        <option value="">학교 선택</option>${schoolOptions}
+      </select>
+      <select id="editGrade" style="padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
+        <option value="">학년</option>
+        <option value="1" ${grade=='1'?'selected':''}>고1</option>
+        <option value="2" ${grade=='2'?'selected':''}>고2</option>
+        <option value="3" ${grade=='3'?'selected':''}>고3</option>
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px 16px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;cursor:pointer;">취소</button>
+        <button id="editSaveBtn" style="padding:8px 16px;border-radius:6px;border:none;background:#89b4fa;color:#1e1e2e;font-weight:bold;cursor:pointer;">저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#editSaveBtn').onclick = async () => {
+    const updates = {
+      name:   modal.querySelector('#editName').value.trim(),
+      school: modal.querySelector('#editSchool').value || null,
+      grade:  modal.querySelector('#editGrade').value ? Number(modal.querySelector('#editGrade').value) : null,
+    };
+    if (!updates.name) return alert('이름을 입력하세요');
+    try {
+      await API.updateStudent(id, updates);
+      modal.remove();
+      loadStudents();
+    } catch(e) { alert(e.message); }
+  };
 }
 
 async function deleteStudent(id) {
