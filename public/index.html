@@ -173,6 +173,8 @@ body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; backgroun
 })();
 </script>
 <script>
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
   const avatars = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'];
   function getAvatar(name, index) {
     if (name === '이루다') return '🌻';
@@ -198,8 +200,8 @@ body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; backgroun
         card.innerHTML = `
           <div class="avatar-wrap av-${i % 12}">${getAvatar(s.name, i)}</div>
           <div class="student-info">
-            <div class="student-name">${s.name}</div>
-            ${sub ? `<div class="student-sub">${sub}</div>` : ''}
+            <div class="student-name">${esc(s.name)}</div>
+            ${sub ? `<div class="student-sub">${esc(sub)}</div>` : ''}
           </div>
           <span class="student-arrow">›</span>`;
         card.onclick = () => {

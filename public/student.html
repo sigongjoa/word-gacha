@@ -346,6 +346,8 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
     const msg = document.getElementById('wordMsg');
     msg.className = 'msg'; msg.textContent = '';
     if (!en || !ko) { msg.className = 'msg err'; msg.textContent = '영어 단어와 뜻을 모두 입력하세요.'; return; }
+    const addBtn = document.getElementById('addBtn');
+    addBtn.disabled = true; addBtn.textContent = '추가 중...';
     try {
       await API.addWord(studentId, { english: en, korean: ko });
       document.getElementById('enInput').value = '';
@@ -354,6 +356,7 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
       loadWords();
       setTimeout(closeSheet, 1400);
     } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+    finally { addBtn.disabled = false; addBtn.textContent = '추가하기'; }
   }
   document.getElementById('addBtn').onclick = addWord;
   document.getElementById('koInput').addEventListener('keydown', e => { if (e.key === 'Enter') addWord(); });
@@ -541,7 +544,7 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
     const btn = card.querySelector('.btn-dontknow');
     btn.disabled = true; btn.textContent = '추가 중...';
     try {
-      await API._fetch(`/students/${studentId}/words`, { method: 'POST', body: JSON.stringify({ english, korean, blank_type: 'korean' }) });
+      await API.addWord(studentId, { english, korean, blank_type: 'korean' });
       addedWordIds.add(wordId);
       card.querySelector('.tb-actions').innerHTML = '<button class="btn-added">✅ 단어장에 추가됨</button>';
       loadWords();
