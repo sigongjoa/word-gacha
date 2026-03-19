@@ -914,7 +914,7 @@ async function runPrint(ids, grammarIds) {
   try {
     const result = await API.generatePrint(ids, grammarIds);
     if (!result.jobs?.length) { toast('승인된 단어가 있는 학생이 없습니다', 'err'); return; }
-    localStorage.setItem('printJob', JSON.stringify(result));
+    localStorage.setItem('printJob', JSON.stringify({ ...result, createdAt: Date.now() }));
     const win = window.open('print.html', '_blank');
     if (win) {
       toast(`시험지 생성 완료! (${result.jobs.length}명)`, 'ok');
