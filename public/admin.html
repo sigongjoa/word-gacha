@@ -159,7 +159,7 @@
   <div class="tab" data-tab="wrong">❌ 오답 현황</div>
   <div class="tab" data-tab="grammar">📚 문법 Q&amp;A</div>
   <div class="tab" data-tab="print">🖨️ 프린트</div>
-  <div class="tab" onclick="window.location.href='grade.html'">✏️ 채점</div>
+  <div class="tab" data-tab="grade">✏️ 채점</div>
   <div class="tab" data-tab="students">👤 학생 관리</div>
   <div class="tab" data-tab="textbook-viewer">📖 교재 데이터</div>
 </div>
@@ -433,6 +433,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'print')             loadPrintTab();
     if (tab.dataset.tab === 'students')          loadStudents();
     if (tab.dataset.tab === 'textbook-viewer')   { /* 불러오기 버튼으로 수동 로드 */ }
+    if (tab.dataset.tab === 'grade')             { window.location.href = 'grade.html'; return; }
   };
 });
 
