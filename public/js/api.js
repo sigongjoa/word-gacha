@@ -82,6 +82,17 @@ const API = {
   // 학생의 현재 교재 조회
   async getStudentTextbook(studentId) { return this._fetch(`/students/${studentId}/textbook`) },
 
+  // 수행평가 서술형 연습
+  async writingGenerate(studentId, problemType) {
+    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'generate', studentId, problemType }) })
+  },
+  async writingGrade(studentId, sessionId, studentAnswer) {
+    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'grade', studentId, sessionId, studentAnswer }) })
+  },
+  async writingHistory(studentId) {
+    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'history', studentId }) })
+  },
+
   // 교재 단어/문법 (textbookId 기반)
   async getTextbookWords(textbookId, unit)   { return this._fetch(`/textbook/${textbookId}/words${unit ? `?unit=${unit}` : ''}`) },
   async getTextbookGrammar(textbookId, unit) { return this._fetch(`/textbook/${textbookId}/grammar${unit ? `?unit=${unit}` : ''}`) },

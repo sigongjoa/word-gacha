@@ -79,3 +79,22 @@ CREATE POLICY "deny_anon_words"      ON words      FOR ALL TO anon USING (false)
 CREATE POLICY "deny_anon_grammar_qa" ON grammar_qa FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- service_role은 RLS 우회 → 별도 정책 불필요
+
+-- ============================================
+-- 5. Writing Sessions 테이블 (수행평가 연습)
+-- ============================================
+CREATE TABLE IF NOT EXISTS writing_sessions (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id     UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  problem_type   TEXT NOT NULL CHECK (problem_type IN ('sentence_completion','word_arrangement','summary_writing','free_writing')),
+  problem        JSONB NOT NULL,       -- 문제 전체 구조
+  target_words   JSONB NOT NULL,       -- [{id,english,korean}] 목표 단어
+  student_answer TEXT,                 -- 제출 답안 (null=미제출)
+  grade          JSONB,                -- 채점 결과 (null=미채점)
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_writing_student ON writing_sessions(student_id, created_at DESC);
+
+ALTER TABLE writing_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "deny_anon_writing" ON writing_sessions FOR ALL TO anon USING (false) WITH CHECK (false);

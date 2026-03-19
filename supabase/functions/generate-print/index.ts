@@ -80,6 +80,21 @@ function parseJSON(text: string): unknown[] | null {
   }
 }
 
+// Gemini 반환 어휘/문법 문제 유효성 검사
+function validateProblem(p: unknown): boolean {
+  if (!p || typeof p !== 'object') return false
+  const prob = p as Record<string, unknown>
+  // sentence에 빈칸 마커 필수
+  if (!prob.sentence || typeof prob.sentence !== 'string' || !prob.sentence.includes('_____')) return false
+  // answer 비어있으면 안 됨
+  if (!prob.answer || typeof prob.answer !== 'string' || !prob.answer.trim()) return false
+  // options: 4개 이상, 빈 항목 없음, answer 포함
+  if (!Array.isArray(prob.options) || prob.options.length < 4) return false
+  if ((prob.options as unknown[]).some((o) => !o || typeof o !== 'string' || !(o as string).trim())) return false
+  if (!(prob.options as string[]).includes(prob.answer as string)) return false
+  return true
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -119,30 +134,46 @@ Deno.serve(async (req) => {
     allGrammar = data ?? []
   }
 
-  // 학생별 Part 3용 문법 생성 헬퍼
+    // 학생별 Part 3용 문법 생성 헬퍼 (재시도 포함)
   async function buildPart3(studentId: string): Promise<unknown[]> {
-    // 선생님 Q&A(student_id null) + 해당 학생 본인 질문만
     const forStudent = allGrammar.filter(
       (g) => !g.student_id || g.student_id === studentId
     )
     if (!forStudent.length) return []
     const selected = shuffle(forStudent).slice(0, 5)
-    const prompt = `너는 수능 영어 교사야. 다음 문법 개념들로 빈칸 4지선다 문제를 만들어줘.
+
+    const buildPrompt = (items: typeof selected) =>
+      `너는 수능 영어 교사야. 다음 문법 개념들로 빈칸 4지선다 문제를 만들어줘.
 
 규칙:
 - 자연스러운 영어 문장에 빈칸(_____) 포함
 - 4지선다: 정답 1개 + 오답 3개 (그럴듯하게)
 - 수능 지문 스타일
+- 각 문제에 반드시 _____가 포함되어야 함
+- options 배열에 answer가 반드시 포함되어야 함
 
 문법 개념:
-${selected.map((g, i) => `${i + 1}. Q: ${g.question} / A: ${g.answer}`).join('\n')}
+${items.map((g, i) => `${i + 1}. Q: ${g.question} / A: ${g.answer}`).join('\n')}
 
 반드시 아래 JSON 배열로만 응답 (다른 텍스트 없이):
 [{"sentence":"...","answer":"...","options":["답1","답2","답3","답4"],"grammar_point":"문법개념명"}]
 
 options는 answer를 포함한 4개를 랜덤 순서로.`
-    const res = await callGemini(prompt, GEMINI_KEY)
-    return parseJSON(res) ?? []
+
+    const results: unknown[] = []
+    const MAX_RETRIES = 3
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const needed = selected.length - results.length
+      if (needed <= 0) break
+      // 남은 개수만큼의 문법 항목으로 재시도
+      const pendingItems = selected.slice(results.length, results.length + needed)
+      const res = await callGemini(buildPrompt(pendingItems), GEMINI_KEY)
+      const valid = (parseJSON(res) ?? []).filter(validateProblem)
+      results.push(...valid)
+    }
+
+    return results.slice(0, selected.length)
   }
 
   // 학생별 처리
@@ -193,25 +224,54 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
 
     let part2: unknown[] = []
     if (vocabInputs.length > 0) {
-      const vocabPrompt = `너는 수능 영어 교사야. 다음 데이터를 바탕으로 빈칸 어휘 문제를 만들어줘.
+      // id 부여해서 어떤 입력이 실패했는지 추적
+      const taggedInputs = vocabInputs.map((v, i) => ({ ...v, _id: i }))
+
+      const buildVocabPrompt = (inputs: typeof taggedInputs) =>
+        `너는 수능 영어 교사야. 다음 데이터를 바탕으로 빈칸 어휘 문제를 만들어줘.
 
 규칙:
-- 자연스러운 영어 문장에 빈칸(_____) 포함
+- 자연스러운 영어 문장에 빈칸(_____) 포함 (필수)
 - 빈칸에는 answer 단어가 문맥상 자연스럽게 들어감
-- 문장이 answer의 의미를 암시해야 함 (직접적이지 않게)
 - 수능 지문 스타일 (학문적, 간결한 영어)
-- type이 synonym이면 원래단어(original)의 유의어, antonym이면 반의어가 answer임
+- type이 synonym이면 유의어, antonym이면 반의어가 answer임
+- options 배열에 answer가 반드시 포함되어야 함
+- 각 입력의 _id를 출력에 그대로 포함할 것
 
 입력:
-${JSON.stringify(vocabInputs)}
+${JSON.stringify(inputs)}
 
 반드시 아래 JSON 배열로만 응답 (다른 텍스트 없이):
-[{"sentence":"...","answer":"...","options":["답1","답2","답3","답4"],"type":"synonym","hint_ko":"한국어힌트"}]
+[{"_id":0,"sentence":"...","answer":"...","options":["답1","답2","답3","답4"],"type":"synonym","hint_ko":"한국어힌트"}]
 
 options는 answer + distractors 4개를 랜덤 순서로.`
 
-      const res = await callGemini(vocabPrompt, GEMINI_KEY)
-      part2 = parseJSON(res) ?? []
+      const MAX_RETRIES = 3
+      const solved = new Map<number, unknown>() // _id → valid problem
+
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        const pending = taggedInputs.filter((v) => !solved.has(v._id))
+        if (!pending.length) break
+        const res = await callGemini(buildVocabPrompt(pending), GEMINI_KEY)
+        const valid = (parseJSON(res) ?? []).filter(validateProblem)
+        for (const p of valid) {
+          const prob = p as Record<string, unknown>
+          const id = prob._id as number
+          if (typeof id === 'number' && !solved.has(id)) {
+            solved.set(id, p)
+          }
+        }
+      }
+
+      // _id 순서 유지, _id 필드 제거
+      part2 = taggedInputs
+        .map((v) => solved.get(v._id))
+        .filter(Boolean)
+        .map((p) => {
+          const { _id, ...rest } = p as Record<string, unknown>
+          void _id
+          return rest
+        })
     }
 
     // Part 3: 학생별 개인화 문법 문제 (본인 질문 + 선생님 Q&A)
