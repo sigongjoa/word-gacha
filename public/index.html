@@ -8,81 +8,163 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #f6fafe; min-height: 100dvh; display: flex; flex-direction: column; }
+body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #f0f4f8; min-height: 100dvh; display: flex; flex-direction: column; }
 
-/* ── Hero ── */
-.hero { padding: 48px 20px 28px; text-align: center; }
-.hero-icon { font-size: 2.8rem; margin-bottom: 12px; }
-.hero h1 { font-family: 'Manrope', sans-serif; font-size: 1.8rem; font-weight: 800; color: #1e3a5f; letter-spacing: -.02em; }
-.hero p  { color: #8a9ab0; font-size: .9rem; margin-top: 6px; }
+/* ── Hero Panel ── */
+.hero {
+  background: linear-gradient(155deg, #1e3a5f 0%, #2d5a8e 60%, #3a6fa5 100%);
+  padding: 56px 24px 72px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: -30px;
+  width: 220px; height: 220px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.04);
+}
+.hero-icon-wrap {
+  width: 64px; height: 64px;
+  background: rgba(255,255,255,.15);
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 1.9rem;
+  position: relative; z-index: 1;
+}
+.hero h1 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.9rem; font-weight: 800;
+  color: #fff;
+  letter-spacing: -.02em;
+  position: relative; z-index: 1;
+}
+.hero p {
+  color: rgba(255,255,255,.65);
+  font-size: .88rem; margin-top: 6px;
+  position: relative; z-index: 1;
+}
 
-/* ── Section Label ── */
-.section-label { font-size: .68rem; font-weight: 700; color: #9aafc4; text-transform: uppercase; letter-spacing: .09em; padding: 0 20px; margin-bottom: 12px; }
-
-/* ── Student List ── */
-.scroll-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 20px 16px;
+/* ── Sheet (리스트 컨테이너) ── */
+.sheet {
+  background: #f0f4f8;
+  border-radius: 24px 24px 0 0;
+  margin-top: -24px;
+  flex: 1;
+  padding: 24px 20px 0;
+  position: relative;
+  z-index: 2;
+}
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: #d1d9e3;
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+.section-label {
+  font-size: .68rem; font-weight: 700; color: #9aafc4;
+  text-transform: uppercase; letter-spacing: .09em;
+  margin-bottom: 12px;
 }
 
 /* ── Student Card ── */
+.student-list { display: flex; flex-direction: column; gap: 10px; }
 .student-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: flex; align-items: center; gap: 14px;
   background: #fff;
   border-radius: 16px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   cursor: pointer;
   box-shadow: 0 1px 6px rgba(0,0,0,.05);
   transition: transform .12s, box-shadow .12s;
 }
-.student-card:active { transform: scale(.98); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-.student-card .avatar { font-size: 2rem; line-height: 1; flex-shrink: 0; }
-.student-card .name { font-weight: 700; font-size: 1rem; color: #1e3a5f; flex: 1; }
-.student-card .arrow { color: #c3cdd8; font-size: 1.1rem; }
+.student-card:active { transform: scale(.98); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.avatar-wrap {
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.student-info { flex: 1; min-width: 0; }
+.student-name { font-weight: 700; font-size: .98rem; color: #1e3a5f; }
+.student-sub  { font-size: .75rem; color: #9aafc4; margin-top: 2px; }
+.student-arrow { color: #c3cdd8; font-size: 1.2rem; font-weight: 300; flex-shrink: 0; }
 
-/* ── Loading / Empty ── */
-.loading-row { display: flex; flex-direction: column; gap: 10px; padding: 4px 20px 16px; }
-.skeleton-card { width: 100%; height: 64px; border-radius: 16px; background: linear-gradient(90deg, #e8eef4 25%, #f4f8fc 50%, #e8eef4 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+/* ── Avatar Colors (index 기반) ── */
+.av-0  { background: #dbeafe; } .av-1  { background: #fce7f3; }
+.av-2  { background: #d1fae5; } .av-3  { background: #fef3c7; }
+.av-4  { background: #ede9fe; } .av-5  { background: #fee2e2; }
+.av-6  { background: #e0f2fe; } .av-7  { background: #fdf4ff; }
+.av-8  { background: #ecfdf5; } .av-9  { background: #fff7ed; }
+.av-10 { background: #f0fdf4; } .av-11 { background: #fafafa; }
+
+/* ── Skeleton ── */
+.skeleton-card { width: 100%; height: 74px; border-radius: 16px; background: linear-gradient(90deg, #e2e8f0 25%, #eef2f7 50%, #e2e8f0 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.empty { text-align: center; color: #9aafc4; padding: 40px 20px; font-size: .9rem; line-height: 1.7; }
+.empty { text-align: center; color: #9aafc4; padding: 48px 20px; font-size: .9rem; line-height: 1.8; }
 
 /* ── Admin Link ── */
-.admin-link { display: block; text-align: center; margin-top: auto; padding: 24px 0 calc(24px + env(safe-area-inset-bottom)); color: #b0bec5; font-size: .82rem; text-decoration: none; }
-.admin-link:active { color: #4a6fa5; }
+.admin-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 28px auto calc(28px + env(safe-area-inset-bottom));
+  padding: 10px 20px;
+  border: 1.5px solid #d1d9e3;
+  border-radius: 20px;
+  background: #fff;
+  color: #8a9ab0;
+  font-size: .82rem; font-weight: 600;
+  text-decoration: none;
+  width: fit-content;
+}
+.admin-btn:active { background: #f0f4f8; }
 </style>
 </head>
 <body>
 
+<!-- Hero -->
 <div class="hero">
-  <div class="hero-icon">📖</div>
+  <div class="hero-icon-wrap">📖</div>
   <h1>Word Gacha</h1>
-  <p>이름을 선택해서 단어를 입력하세요</p>
+  <p>이름을 선택하세요</p>
 </div>
 
-<p class="section-label" id="sectionLabel" style="display:none">학생 선택</p>
+<!-- Sheet -->
+<div class="sheet">
+  <div class="sheet-handle"></div>
+  <p class="section-label" id="sectionLabel" style="display:none">학생 선택</p>
 
-<div class="loading-row" id="loadingRow">
-  <div class="skeleton-card"></div>
-  <div class="skeleton-card"></div>
-  <div class="skeleton-card"></div>
-  <div class="skeleton-card"></div>
+  <!-- Skeleton -->
+  <div class="student-list" id="loadingRow">
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+  </div>
+
+  <div class="student-list" id="scrollRow" style="display:none"></div>
+  <p class="empty" id="empty" style="display:none">등록된 학생이 없습니다.<br>선생님에게 문의하세요.</p>
+
+  <a href="login.html" class="admin-btn">🔒 선생님 전용</a>
 </div>
-
-<div class="scroll-row" id="scrollRow" style="display:none"></div>
-<p class="empty" id="empty" style="display:none">등록된 학생이 없습니다.<br>선생님에게 문의하세요.</p>
-
-<a href="login.html" class="admin-link">선생님 로그인 →</a>
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script>
 (async () => {
   try {
-    const res  = await fetch('version.json?_=' + Date.now());
+    const res = await fetch('version.json?_=' + Date.now());
     const { v } = await res.json();
     const saved = localStorage.getItem('appVersion');
     if (saved && saved !== v) { localStorage.setItem('appVersion', v); location.reload(true); return; }
@@ -112,7 +194,14 @@ body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; backgroun
       students.forEach((s, i) => {
         const card = document.createElement('div');
         card.className = 'student-card';
-        card.innerHTML = `<div class="avatar">${getAvatar(s.name, i)}</div><div class="name">${s.name}</div><span class="arrow">›</span>`;
+        const sub = [s.school, s.grade ? `${s.grade}학년` : ''].filter(Boolean).join(' · ');
+        card.innerHTML = `
+          <div class="avatar-wrap av-${i % 12}">${getAvatar(s.name, i)}</div>
+          <div class="student-info">
+            <div class="student-name">${s.name}</div>
+            ${sub ? `<div class="student-sub">${sub}</div>` : ''}
+          </div>
+          <span class="student-arrow">›</span>`;
         card.onclick = () => {
           sessionStorage.setItem('studentId',   s.id);
           sessionStorage.setItem('studentName', s.name);
