@@ -68,6 +68,15 @@
   /* Part 2/3 안내 */
   .info-box { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 10px; padding: 12px 16px;
               font-size: .85rem; color: #2b6cb0; margin-bottom: 14px; line-height: 1.6; }
+
+  /* 토스트 */
+  .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+           background: #2d3748; color: #fff; padding: 12px 20px; border-radius: 10px;
+           font-size: .9rem; font-weight: 600; white-space: nowrap;
+           opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; z-index: 999; }
+  .toast.ok  { background: #38a169; }
+  .toast.err { background: #e53e3e; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -82,9 +91,20 @@
   <div id="app"><div class="empty">채점 데이터를 불러오는 중...</div></div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script>
+let toastTimer = null
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast')
+  if (toastTimer) clearTimeout(toastTimer)
+  t.textContent = msg
+  t.className = `toast ${type} show`
+  toastTimer = setTimeout(() => { t.classList.remove('show') }, 3000)
+}
+
 // 관리자 로그인 체크
 if (!localStorage.getItem('adminToken')) {
   window.location.href = 'login.html'
@@ -215,8 +235,7 @@ if (!data?.jobs?.length || isExpired) {
 
     // 저장 버튼
     html += `<div class="save-area">
-      <button class="save-btn" id="saveBtn" onclick="saveGrades(${jobIdx})">💾 ${job.studentName} 채점 저장 (단어장 업데이트)</button>
-      <div class="save-msg" id="saveMsg"></div>
+      <button class="save-btn" id="saveBtn" onclick="saveGrades(${jobIdx})">💾 ${job.studentName} 채점 저장</button>
     </div>`
 
     document.getElementById('app').innerHTML = html
@@ -234,7 +253,6 @@ if (!data?.jobs?.length || isExpired) {
 
   async function saveGrades(jobIdx) {
     const btn = document.getElementById('saveBtn')
-    const msg = document.getElementById('saveMsg')
     const job = data.jobs[jobIdx]
     const g = grades[jobIdx]
 
@@ -245,8 +263,7 @@ if (!data?.jobs?.length || isExpired) {
       .filter(item => item.id && item.correct !== null)
 
     if (!toUpdate.length) {
-      msg.className = 'save-msg err'
-      msg.textContent = 'Part 1 문제를 먼저 채점해주세요.'
+      showToast('Part 1 문제를 먼저 채점해주세요.', 'err')
       return
     }
 
@@ -254,12 +271,12 @@ if (!data?.jobs?.length || isExpired) {
     btn.textContent = '저장 중...'
     try {
       await Promise.all(toUpdate.map(item => API.reviewWord(item.id, item.correct)))
-      msg.className = 'save-msg ok'
-      msg.textContent = `✓ ${toUpdate.length}개 단어 업데이트 완료! (O: ${toUpdate.filter(t=>t.correct).length} / X: ${toUpdate.filter(t=>!t.correct).length})`
+      const oCount = toUpdate.filter(t=>t.correct).length
+      const xCount = toUpdate.filter(t=>!t.correct).length
+      showToast(`✓ ${toUpdate.length}개 저장 완료   O ${oCount}개 · X ${xCount}개`, 'ok')
       btn.textContent = '✓ 저장됨'
     } catch (e) {
-      msg.className = 'save-msg err'
-      msg.textContent = '저장 실패: ' + e.message
+      showToast('저장 실패: ' + e.message, 'err')
       btn.disabled = false
       btn.textContent = '💾 채점 저장'
     }
