@@ -2,63 +2,101 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>Word Gacha</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 24px 16px; }
-  header { text-align: center; padding: 32px 0 24px; }
-  header h1 { font-size: 2rem; font-weight: 800; color: #1a202c; }
-  header p  { color: #718096; margin-top: 8px; font-size: .95rem; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; max-width: 680px; margin: 0 auto; }
-  .student-btn {
-    background: #fff; border: 2px solid #e2e8f0; border-radius: 14px;
-    padding: 22px 12px; text-align: center; cursor: pointer;
-    transition: all .18s; font-size: 1rem; font-weight: 600; color: #2d3748;
-  }
-  .student-btn:hover { border-color: #667eea; background: #ebf4ff; transform: translateY(-2px); box-shadow: 0 4px 14px rgba(102,126,234,.18); }
-  .student-btn .avatar { font-size: 2rem; margin-bottom: 8px; }
-  .admin-link { display: block; text-align: center; margin-top: 36px; color: #a0aec0; font-size: .85rem; text-decoration: none; }
-  .admin-link:hover { color: #667eea; }
-  .empty { text-align: center; color: #a0aec0; padding: 48px 0; }
-  #loading { text-align: center; padding: 48px 0; color: #a0aec0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #f6fafe; min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* ── Hero ── */
+.hero { padding: 48px 20px 28px; text-align: center; }
+.hero-icon { font-size: 2.8rem; margin-bottom: 12px; }
+.hero h1 { font-family: 'Manrope', sans-serif; font-size: 1.8rem; font-weight: 800; color: #1e3a5f; letter-spacing: -.02em; }
+.hero p  { color: #8a9ab0; font-size: .9rem; margin-top: 6px; }
+
+/* ── Section Label ── */
+.section-label { font-size: .68rem; font-weight: 700; color: #9aafc4; text-transform: uppercase; letter-spacing: .09em; padding: 0 20px; margin-bottom: 12px; }
+
+/* ── Horizontal Scroll Row ── */
+.scroll-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 20px 16px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+}
+.scroll-row::-webkit-scrollbar { display: none; }
+
+/* ── Student Card ── */
+.student-card {
+  flex-shrink: 0;
+  width: 120px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 20px 12px 16px;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  scroll-snap-align: start;
+}
+.student-card:active { transform: scale(.95); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.student-card .avatar { font-size: 2.2rem; margin-bottom: 10px; line-height: 1; }
+.student-card .name { font-weight: 700; font-size: .9rem; color: #1e3a5f; }
+
+/* ── Loading / Empty ── */
+.loading-row { display: flex; gap: 12px; padding: 4px 20px 16px; overflow: hidden; }
+.skeleton-card { flex-shrink: 0; width: 120px; height: 130px; border-radius: 18px; background: linear-gradient(90deg, #e8eef4 25%, #f4f8fc 50%, #e8eef4 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.empty { text-align: center; color: #9aafc4; padding: 40px 20px; font-size: .9rem; line-height: 1.7; }
+
+/* ── Admin Link ── */
+.admin-link { display: block; text-align: center; margin-top: auto; padding: 24px 0 calc(24px + env(safe-area-inset-bottom)); color: #b0bec5; font-size: .82rem; text-decoration: none; }
+.admin-link:active { color: #4a6fa5; }
 </style>
 </head>
 <body>
-<header>
-  <h1>📖 Word Gacha</h1>
-  <p>이름을 선택해서 단어를 입력하세요</p>
-</header>
 
-<div id="loading">불러오는 중...</div>
-<div class="grid" id="grid" style="display:none"></div>
+<div class="hero">
+  <div class="hero-icon">📖</div>
+  <h1>Word Gacha</h1>
+  <p>이름을 선택해서 단어를 입력하세요</p>
+</div>
+
+<p class="section-label" id="sectionLabel" style="display:none">학생 선택</p>
+
+<div class="loading-row" id="loadingRow">
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+</div>
+
+<div class="scroll-row" id="scrollRow" style="display:none"></div>
 <p class="empty" id="empty" style="display:none">등록된 학생이 없습니다.<br>선생님에게 문의하세요.</p>
+
 <a href="login.html" class="admin-link">선생님 로그인 →</a>
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script>
-// ── 버전 체크 & 자동 새로고침 ────────────────────────────────
 (async () => {
   try {
     const res  = await fetch('version.json?_=' + Date.now());
     const { v } = await res.json();
     const saved = localStorage.getItem('appVersion');
-    if (saved && saved !== v) {
-      localStorage.setItem('appVersion', v);
-      location.reload(true);
-      return;
-    }
+    if (saved && saved !== v) { localStorage.setItem('appVersion', v); location.reload(true); return; }
     localStorage.setItem('appVersion', v);
   } catch {}
 })();
 </script>
 <script>
   const avatars = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'];
-
   function getAvatar(name, index) {
     if (name === '이루다') return '🌻';
     if (name === '정윤재') return '🦕';
@@ -69,23 +107,28 @@
   async function load() {
     try {
       const students = await API.getStudents();
-      document.getElementById('loading').style.display = 'none';
+      document.getElementById('loadingRow').style.display = 'none';
       if (!students.length) { document.getElementById('empty').style.display = 'block'; return; }
-      const grid = document.getElementById('grid');
-      grid.style.display = 'grid';
+
+      document.getElementById('sectionLabel').style.display = 'block';
+      const row = document.getElementById('scrollRow');
+      row.style.display = 'flex';
+
       students.forEach((s, i) => {
-        const btn = document.createElement('div');
-        btn.className = 'student-btn';
-        btn.innerHTML = `<div class="avatar">${getAvatar(s.name, i)}</div>${s.name}`;
-        btn.onclick = () => {
+        const card = document.createElement('div');
+        card.className = 'student-card';
+        card.innerHTML = `<div class="avatar">${getAvatar(s.name, i)}</div><div class="name">${s.name}</div>`;
+        card.onclick = () => {
           sessionStorage.setItem('studentId',   s.id);
           sessionStorage.setItem('studentName', s.name);
           window.location.href = 'student.html';
         };
-        grid.appendChild(btn);
+        row.appendChild(card);
       });
     } catch {
-      document.getElementById('loading').textContent = '서버에 연결할 수 없습니다.';
+      document.getElementById('loadingRow').style.display = 'none';
+      document.getElementById('empty').style.display = 'block';
+      document.getElementById('empty').textContent = '서버에 연결할 수 없습니다.';
     }
   }
   load();
