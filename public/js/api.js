@@ -82,15 +82,26 @@ const API = {
   // 학생의 현재 교재 조회
   async getStudentTextbook(studentId) { return this._fetch(`/students/${studentId}/textbook`) },
 
-  // 수행평가 서술형 연습
+  // 수행평가 서술형 연습 (adminToken 제외 — no-verify-jwt 엔드포인트)
+  async _fetchNoAuth(path, options = {}) {
+    const res = await fetch(CONFIG.FUNCTIONS_URL + path, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...options,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(err.error || '요청 실패')
+    }
+    return res.json()
+  },
   async writingGenerate(studentId, problemType) {
-    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'generate', studentId, problemType }) })
+    return this._fetchNoAuth('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'generate', studentId, problemType }) })
   },
   async writingGrade(studentId, sessionId, studentAnswer) {
-    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'grade', studentId, sessionId, studentAnswer }) })
+    return this._fetchNoAuth('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'grade', studentId, sessionId, studentAnswer }) })
   },
   async writingHistory(studentId) {
-    return this._fetch('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'history', studentId }) })
+    return this._fetchNoAuth('/writing-practice', { method: 'POST', body: JSON.stringify({ action: 'history', studentId }) })
   },
 
   // 교재 단어/문법 (textbookId 기반)
