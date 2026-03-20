@@ -76,6 +76,13 @@ const API = {
     return this._fetch(`/grammar/${id}?student_id=${encodeURIComponent(studentId)}`, { method: 'DELETE' })
   },
 
+  // 학생 PIN 검증 (공개 엔드포인트 — adminToken 불필요)
+  async verifyStudentPin(studentId, pin) {
+    return this._fetchNoAuth(`/students/${studentId}/verify-pin`, {
+      method: 'POST', body: JSON.stringify({ pin }),
+    })
+  },
+
   // 학교 목록
   async getSchools() { return this._fetch('/schools') },
 

@@ -957,11 +957,14 @@ async function loadStudents() {
     const schoolLabel = s.school ? `${s.school} ` : '';
     const gradeLabel  = s.grade  ? `고${s.grade} ` : '';
     const textbookTag = (s.school && s.grade) ? `<span style="font-size:11px;color:#888;display:block;">${schoolLabel}${gradeLabel}</span>` : `<span style="font-size:11px;color:#f59e0b;display:block;">학교 미설정</span>`;
+    const pinTag = s.has_pin
+      ? `<span style="font-size:11px;color:#276749;display:block;">🔒 PIN 설정됨</span>`
+      : `<span style="font-size:11px;color:#a0aec0;display:block;">🔓 PIN 없음</span>`;
     return `
     <div class="student-card">
-      <div class="student-name">👤 ${esc(s.name)}${textbookTag}</div>
+      <div class="student-name">👤 ${esc(s.name)}${textbookTag}${pinTag}</div>
       <div class="student-actions">
-        <button class="btn btn-sm btn-outline" onclick="editStudent('${s.id}', '${esc(s.name)}', '${s.school||''}', '${s.grade||''}')">수정</button>
+        <button class="btn btn-sm btn-outline" onclick="editStudent('${s.id}', '${esc(s.name)}', '${s.school||''}', '${s.grade||''}', ${!!s.has_pin})">수정</button>
         <button class="btn btn-sm btn-danger"  onclick="deleteStudent('${s.id}')">삭제</button>
       </div>
     </div>
@@ -985,14 +988,30 @@ document.getElementById('addStudentBtn').onclick = async () => {
   } catch(e) { flash('studentMsg', e.message, 'err'); }
 };
 
-function editStudent(id, name, school, grade) {
+function editStudent(id, name, school, grade, hasPin) {
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
   const schoolOptions = window._schoolsData
     ? Object.entries(window._schoolsData.schools).map(([k,s]) => `<option value="${k}" ${k===school?'selected':''}>${s.name}</option>`).join('')
     : `<option value="${school}">${school}</option>`;
+  const pinSection = hasPin
+    ? `<div style="border-top:1px solid #45475a;padding-top:12px;">
+         <div style="font-size:.82rem;color:#a0aec0;margin-bottom:8px;">🔒 PIN 설정됨</div>
+         <div style="display:flex;gap:8px;">
+           <input id="editNewPin" type="text" inputmode="numeric" maxlength="4" placeholder="새 PIN (4자리)" style="flex:1;padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
+           <button id="editSetPinBtn" style="padding:8px 12px;border-radius:6px;border:none;background:#89b4fa;color:#1e1e2e;font-weight:bold;cursor:pointer;font-size:.8rem;">변경</button>
+           <button id="editResetPinBtn" style="padding:8px 12px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#fc8181;cursor:pointer;font-size:.8rem;">초기화</button>
+         </div>
+       </div>`
+    : `<div style="border-top:1px solid #45475a;padding-top:12px;">
+         <div style="font-size:.82rem;color:#a0aec0;margin-bottom:8px;">🔓 PIN 없음</div>
+         <div style="display:flex;gap:8px;">
+           <input id="editNewPin" type="text" inputmode="numeric" maxlength="4" placeholder="PIN 설정 (4자리)" style="flex:1;padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
+           <button id="editSetPinBtn" style="padding:8px 12px;border-radius:6px;border:none;background:#89b4fa;color:#1e1e2e;font-weight:bold;cursor:pointer;font-size:.8rem;">설정</button>
+         </div>
+       </div>`;
   modal.innerHTML = `
-    <div style="background:#1e1e2e;border-radius:12px;padding:24px;min-width:300px;display:flex;flex-direction:column;gap:12px;">
+    <div style="background:#1e1e2e;border-radius:12px;padding:24px;min-width:300px;max-width:360px;width:100%;display:flex;flex-direction:column;gap:12px;">
       <h3 style="margin:0;color:#cdd6f4;">학생 정보 수정</h3>
       <input id="editName" type="text" value="${name.replace(/&quot;/g,'"')}" placeholder="이름" style="padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
       <select id="editSchool" style="padding:8px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;">
@@ -1004,12 +1023,39 @@ function editStudent(id, name, school, grade) {
         <option value="2" ${grade=='2'?'selected':''}>고2</option>
         <option value="3" ${grade=='3'?'selected':''}>고3</option>
       </select>
+      ${pinSection}
+      <div id="pinMsg" style="font-size:.8rem;min-height:16px;"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px 16px;border-radius:6px;border:1px solid #45475a;background:#313244;color:#cdd6f4;cursor:pointer;">취소</button>
         <button id="editSaveBtn" style="padding:8px 16px;border-radius:6px;border:none;background:#89b4fa;color:#1e1e2e;font-weight:bold;cursor:pointer;">저장</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
+
+  const pinMsg = modal.querySelector('#pinMsg');
+
+  // PIN 설정/변경
+  modal.querySelector('#editSetPinBtn')?.addEventListener('click', async () => {
+    const pin = (modal.querySelector('#editNewPin')?.value || '').trim();
+    if (!/^\d{4}$/.test(pin)) { pinMsg.style.color = '#fc8181'; pinMsg.textContent = 'PIN은 4자리 숫자여야 합니다'; return; }
+    try {
+      await API.updateStudent(id, { pin });
+      pinMsg.style.color = '#68d391'; pinMsg.textContent = 'PIN이 설정됐습니다';
+      modal.querySelector('#editNewPin').value = '';
+      loadStudents();
+    } catch(e) { pinMsg.style.color = '#fc8181'; pinMsg.textContent = e.message; }
+  });
+
+  // PIN 초기화
+  modal.querySelector('#editResetPinBtn')?.addEventListener('click', async () => {
+    if (!confirm('PIN을 초기화하면 이 학생은 PIN 없이 입장할 수 있습니다. 계속할까요?')) return;
+    try {
+      await API.updateStudent(id, { pin: '' });
+      pinMsg.style.color = '#68d391'; pinMsg.textContent = 'PIN이 초기화됐습니다';
+      loadStudents();
+    } catch(e) { pinMsg.style.color = '#fc8181'; pinMsg.textContent = e.message; }
+  });
+
   modal.querySelector('#editSaveBtn').onclick = async () => {
     const updates = {
       name:   modal.querySelector('#editName').value.trim(),
