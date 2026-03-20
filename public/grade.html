@@ -118,171 +118,172 @@ const data = JSON.parse(
 const SIX_HOURS = 6 * 60 * 60 * 1000
 const isExpired = data?.createdAt && (Date.now() - data.createdAt > SIX_HOURS)
 
+// 전역 상태 — inline onclick에서 접근 가능
+let grades = []
+let currentJob = 0
+
+function score(jobIdx) {
+  const g = grades[jobIdx]
+  const total = Object.keys(g).length
+  const correct = Object.values(g).filter(v => v === true).length
+  const graded  = Object.values(g).filter(v => v !== null).length
+  return { total, correct, graded }
+}
+
+function renderTabs() {
+  return `<div class="student-tabs">
+    ${data.jobs.map((job, i) => {
+      const { correct, total, graded } = score(i)
+      const badge = graded === total ? ` (${correct}/${total})` : graded > 0 ? ` (${graded}/${total} 채점)` : ''
+      return `<div class="stu-tab ${i === currentJob ? 'active' : ''}" onclick="switchJob(${i})">${esc(job.studentName)}${badge}</div>`
+    }).join('')}
+  </div>`
+}
+
+function renderJob(jobIdx) {
+  const job = data.jobs[jobIdx]
+  const g = grades[jobIdx]
+  const { correct, total, graded } = score(jobIdx)
+
+  let html = renderTabs()
+
+  // 요약
+  html += `<div class="summary-bar">
+    <div>
+      <div class="summary-score">${graded === total ? `${correct}점` : `${graded}/${total} 채점됨`}</div>
+      <div class="summary-label">${esc(job.studentName)}</div>
+    </div>
+    <div class="summary-detail">
+      <span class="score-o">O: ${Object.values(g).filter(v => v === true).length}</span>
+      <span class="score-x">X: ${Object.values(g).filter(v => v === false).length}</span>
+    </div>
+  </div>`
+
+  // Part 1
+  if (job.part1?.length) {
+    html += `<div class="section-title">Part 1. 단어 (${job.part1.length}문제)</div>`
+    job.part1.forEach((w, i) => {
+      const isO = g[`p1_${i}`] === true
+      const isX = g[`p1_${i}`] === false
+      const blankType = w.blank_type === 'english' ? '영어 빈칸' : w.blank_type === 'korean' ? '한국어 빈칸' : '둘 다 빈칸'
+      html += `<div class="problem-card" id="card_p1_${jobIdx}_${i}">
+        <div class="problem-num">${i + 1}</div>
+        <div class="problem-info">
+          <div class="problem-word">${esc(w.english)}</div>
+          <div class="problem-ko">${esc(w.korean)} · <span style="color:#a0aec0;font-size:.78rem">${esc(blankType)}</span></div>
+        </div>
+        <div class="grade-btns">
+          <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p1_${i}',true)">O</button>
+          <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p1_${i}',false)">X</button>
+        </div>
+      </div>`
+    })
+  }
+
+  // Part 2
+  if (job.part2?.length) {
+    html += `<div class="section-title">Part 2. 어휘 (${job.part2.length}문제)</div>`
+    html += `<div class="info-box">Part 2/3는 채점 기록용입니다. 단어장 박스에는 반영되지 않습니다.</div>`
+    job.part2.forEach((p, i) => {
+      const num = (job.part1||[]).length + i + 1
+      const isO = g[`p2_${i}`] === true
+      const isX = g[`p2_${i}`] === false
+      html += `<div class="problem-card" id="card_p2_${jobIdx}_${i}">
+        <div class="problem-num">${num}</div>
+        <div class="problem-info">
+          <div class="problem-sentence">${esc(p.sentence)}</div>
+          <div class="problem-answer">정답: ${esc(p.answer)}</div>
+        </div>
+        <div class="grade-btns">
+          <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p2_${i}',true)">O</button>
+          <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p2_${i}',false)">X</button>
+        </div>
+      </div>`
+    })
+  }
+
+  // Part 3
+  if (job.part3?.length) {
+    html += `<div class="section-title">Part 3. 문법 (${job.part3.length}문제)</div>`
+    job.part3.forEach((p, i) => {
+      const num = (job.part1||[]).length + (job.part2||[]).length + i + 1
+      const isO = g[`p3_${i}`] === true
+      const isX = g[`p3_${i}`] === false
+      html += `<div class="problem-card" id="card_p3_${jobIdx}_${i}">
+        <div class="problem-num">${num}</div>
+        <div class="problem-info">
+          <div class="problem-sentence">${esc(p.sentence)}</div>
+          <div class="problem-answer">정답: ${esc(p.answer)}${p.grammar_point ? ` · [${esc(p.grammar_point)}]` : ''}</div>
+        </div>
+        <div class="grade-btns">
+          <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p3_${i}',true)">O</button>
+          <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p3_${i}',false)">X</button>
+        </div>
+      </div>`
+    })
+  }
+
+  // 저장 버튼
+  html += `<div class="save-area">
+    <button class="save-btn" id="saveBtn" onclick="saveGrades(${jobIdx})">💾 ${esc(job.studentName)} 채점 저장</button>
+  </div>`
+
+  document.getElementById('app').innerHTML = html
+}
+
+function switchJob(idx) {
+  currentJob = idx
+  renderJob(idx)
+}
+
+function setGrade(jobIdx, key, correct) {
+  grades[jobIdx][key] = correct
+  renderJob(jobIdx)
+}
+
+async function saveGrades(jobIdx) {
+  const btn = document.getElementById('saveBtn')
+  const job = data.jobs[jobIdx]
+  const g = grades[jobIdx]
+
+  // Part 1만 단어장 박스에 반영 (word.id 존재)
+  const part1Words = job.part1 || []
+  const toUpdate = part1Words
+    .map((w, i) => ({ id: w.id, correct: g[`p1_${i}`] }))
+    .filter(item => item.id && item.correct !== null)
+
+  if (!toUpdate.length) {
+    showToast('Part 1 문제를 먼저 채점해주세요.', 'err')
+    return
+  }
+
+  btn.disabled = true
+  btn.textContent = '저장 중...'
+  try {
+    await Promise.all(toUpdate.map(item => API.reviewWord(item.id, item.correct)))
+    const oCount = toUpdate.filter(t=>t.correct).length
+    const xCount = toUpdate.filter(t=>!t.correct).length
+    showToast(`✓ ${toUpdate.length}개 저장 완료   O ${oCount}개 · X ${xCount}개`, 'ok')
+    btn.textContent = '✓ 저장됨'
+  } catch (e) {
+    showToast('저장 실패: ' + e.message, 'err')
+    btn.disabled = false
+    btn.textContent = '💾 채점 저장'
+  }
+}
+
 if (!data?.jobs?.length || isExpired) {
   document.getElementById('app').innerHTML = isExpired
     ? `<div class="empty">채점 데이터가 만료됐습니다. (6시간 초과)<br><a href="admin.html" style="color:#667eea">관리자 화면으로 돌아가기 →</a></div>`
     : '<div class="empty">채점 데이터가 없습니다.<br>관리자 화면 → 프린트 탭에서 시험지를 먼저 생성하세요.</div>'
 } else {
-  let currentJob = 0
-  // 각 job, 각 문제별 채점 상태: grades[jobIdx][qKey] = true(O) | false(X) | null(미채점)
-  const grades = data.jobs.map(job => {
+  grades = data.jobs.map(job => {
     const g = {}
     ;(job.part1 || []).forEach((w, i) => { g[`p1_${i}`] = null })
     ;(job.part2 || []).forEach((p, i) => { g[`p2_${i}`] = null })
     ;(job.part3 || []).forEach((p, i) => { g[`p3_${i}`] = null })
     return g
   })
-
-  function score(jobIdx) {
-    const g = grades[jobIdx]
-    const total = Object.keys(g).length
-    const correct = Object.values(g).filter(v => v === true).length
-    const graded  = Object.values(g).filter(v => v !== null).length
-    return { total, correct, graded }
-  }
-
-  function renderTabs() {
-    return `<div class="student-tabs">
-      ${data.jobs.map((job, i) => {
-        const { correct, total, graded } = score(i)
-        const badge = graded === total ? ` (${correct}/${total})` : graded > 0 ? ` (${graded}/${total} 채점)` : ''
-        return `<div class="stu-tab ${i === currentJob ? 'active' : ''}" onclick="switchJob(${i})">${esc(job.studentName)}${badge}</div>`
-      }).join('')}
-    </div>`
-  }
-
-  function renderJob(jobIdx) {
-    const job = data.jobs[jobIdx]
-    const g = grades[jobIdx]
-    const { correct, total, graded } = score(jobIdx)
-
-    let html = renderTabs()
-
-    // 요약
-    html += `<div class="summary-bar">
-      <div>
-        <div class="summary-score">${graded === total ? `${correct}점` : `${graded}/${total} 채점됨`}</div>
-        <div class="summary-label">${esc(job.studentName)}</div>
-      </div>
-      <div class="summary-detail">
-        <span class="score-o">O: ${Object.values(g).filter(v => v === true).length}</span>
-        <span class="score-x">X: ${Object.values(g).filter(v => v === false).length}</span>
-      </div>
-    </div>`
-
-    // Part 1
-    if (job.part1?.length) {
-      html += `<div class="section-title">Part 1. 단어 (${job.part1.length}문제)</div>`
-      job.part1.forEach((w, i) => {
-        const isO = g[`p1_${i}`] === true
-        const isX = g[`p1_${i}`] === false
-        const blankType = w.blank_type === 'english' ? '영어 빈칸' : w.blank_type === 'korean' ? '한국어 빈칸' : '둘 다 빈칸'
-        html += `<div class="problem-card" id="card_p1_${jobIdx}_${i}">
-          <div class="problem-num">${i + 1}</div>
-          <div class="problem-info">
-            <div class="problem-word">${esc(w.english)}</div>
-            <div class="problem-ko">${esc(w.korean)} · <span style="color:#a0aec0;font-size:.78rem">${esc(blankType)}</span></div>
-          </div>
-          <div class="grade-btns">
-            <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p1_${i}',true)">O</button>
-            <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p1_${i}',false)">X</button>
-          </div>
-        </div>`
-      })
-    }
-
-    // Part 2
-    if (job.part2?.length) {
-      html += `<div class="section-title">Part 2. 어휘 (${job.part2.length}문제)</div>`
-      html += `<div class="info-box">Part 2/3는 채점 기록용입니다. 단어장 박스에는 반영되지 않습니다.</div>`
-      job.part2.forEach((p, i) => {
-        const num = (job.part1||[]).length + i + 1
-        const isO = g[`p2_${i}`] === true
-        const isX = g[`p2_${i}`] === false
-        html += `<div class="problem-card" id="card_p2_${jobIdx}_${i}">
-          <div class="problem-num">${num}</div>
-          <div class="problem-info">
-            <div class="problem-sentence">${esc(p.sentence)}</div>
-            <div class="problem-answer">정답: ${esc(p.answer)}</div>
-          </div>
-          <div class="grade-btns">
-            <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p2_${i}',true)">O</button>
-            <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p2_${i}',false)">X</button>
-          </div>
-        </div>`
-      })
-    }
-
-    // Part 3
-    if (job.part3?.length) {
-      html += `<div class="section-title">Part 3. 문법 (${job.part3.length}문제)</div>`
-      job.part3.forEach((p, i) => {
-        const num = (job.part1||[]).length + (job.part2||[]).length + i + 1
-        const isO = g[`p3_${i}`] === true
-        const isX = g[`p3_${i}`] === false
-        html += `<div class="problem-card" id="card_p3_${jobIdx}_${i}">
-          <div class="problem-num">${num}</div>
-          <div class="problem-info">
-            <div class="problem-sentence">${esc(p.sentence)}</div>
-            <div class="problem-answer">정답: ${esc(p.answer)}${p.grammar_point ? ` · [${esc(p.grammar_point)}]` : ''}</div>
-          </div>
-          <div class="grade-btns">
-            <button class="btn-o ${isO ? 'active' : ''}" onclick="setGrade(${jobIdx},'p3_${i}',true)">O</button>
-            <button class="btn-x ${isX ? 'active' : ''}" onclick="setGrade(${jobIdx},'p3_${i}',false)">X</button>
-          </div>
-        </div>`
-      })
-    }
-
-    // 저장 버튼
-    html += `<div class="save-area">
-      <button class="save-btn" id="saveBtn" onclick="saveGrades(${jobIdx})">💾 ${esc(job.studentName)} 채점 저장</button>
-    </div>`
-
-    document.getElementById('app').innerHTML = html
-  }
-
-  function switchJob(idx) {
-    currentJob = idx
-    renderJob(idx)
-  }
-
-  function setGrade(jobIdx, key, correct) {
-    grades[jobIdx][key] = correct
-    renderJob(jobIdx)
-  }
-
-  async function saveGrades(jobIdx) {
-    const btn = document.getElementById('saveBtn')
-    const job = data.jobs[jobIdx]
-    const g = grades[jobIdx]
-
-    // Part 1만 단어장 박스에 반영 (word.id 존재)
-    const part1Words = job.part1 || []
-    const toUpdate = part1Words
-      .map((w, i) => ({ id: w.id, correct: g[`p1_${i}`] }))
-      .filter(item => item.id && item.correct !== null)
-
-    if (!toUpdate.length) {
-      showToast('Part 1 문제를 먼저 채점해주세요.', 'err')
-      return
-    }
-
-    btn.disabled = true
-    btn.textContent = '저장 중...'
-    try {
-      await Promise.all(toUpdate.map(item => API.reviewWord(item.id, item.correct)))
-      const oCount = toUpdate.filter(t=>t.correct).length
-      const xCount = toUpdate.filter(t=>!t.correct).length
-      showToast(`✓ ${toUpdate.length}개 저장 완료   O ${oCount}개 · X ${xCount}개`, 'ok')
-      btn.textContent = '✓ 저장됨'
-    } catch (e) {
-      showToast('저장 실패: ' + e.message, 'err')
-      btn.disabled = false
-      btn.textContent = '💾 채점 저장'
-    }
-  }
-
   renderJob(0)
 }
 </script>
