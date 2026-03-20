@@ -49,11 +49,13 @@ CREATE TABLE IF NOT EXISTS grammar_qa (
   student_name     TEXT,                          -- 질문한 학생 이름 (표시용)
   status           TEXT NOT NULL DEFAULT 'answered' CHECK (status IN ('pending', 'answered')),
   answered_by      TEXT CHECK (answered_by IN ('teacher', 'ai')),
+  grade            SMALLINT CHECK (grade IN (1, 2, 3)),  -- 학년별 문법 (NULL=전 학년 공통)
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_grammar_include ON grammar_qa(include_in_print);
 CREATE INDEX IF NOT EXISTS idx_grammar_status  ON grammar_qa(status);
+CREATE INDEX IF NOT EXISTS idx_grammar_grade   ON grammar_qa(grade);
 
 -- ============================================
 -- 마이그레이션 (기존 DB에 실행):

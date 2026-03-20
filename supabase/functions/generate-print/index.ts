@@ -153,10 +153,15 @@ Deno.serve(async (req) => {
   }
 
     // 학생별 Part 3용 문법 생성 헬퍼 (재시도 포함)
-  async function buildPart3(studentId: string): Promise<unknown[]> {
-    const forStudent = allGrammar.filter(
-      (g) => !g.student_id || g.student_id === studentId
-    )
+  async function buildPart3(studentId: string, studentGrade: number | null): Promise<unknown[]> {
+    const forStudent = allGrammar.filter((g) => {
+      // 학생 본인 질문이거나 선생님 Q&A는 항상 포함
+      if (g.student_id === studentId) return true
+      if (g.student_id) return false // 다른 학생 질문 제외
+      // 학년 없는 문법(공통) 또는 학생 학년과 일치하는 문법
+      const grammarGrade = g.grade as number | null
+      return !grammarGrade || !studentGrade || grammarGrade === studentGrade
+    })
     if (!forStudent.length) return []
     const selected = shuffle(forStudent).slice(0, 5)
 
@@ -199,7 +204,7 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
 
   for (const studentId of studentIds) {
     const { data: student } = await supabase
-      .from('students').select('name').eq('id', studentId).single()
+      .from('students').select('name, grade').eq('id', studentId).single()
     if (!student) continue
 
     const { data: studentWords } = await supabase
@@ -305,8 +310,9 @@ ${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
         })
     }
 
-    // Part 3: 학생별 개인화 문법 문제 (본인 질문 + 선생님 Q&A)
-    const part3 = await buildPart3(studentId)
+    // Part 3: 학생별 개인화 문법 문제 (본인 질문 + 선생님 Q&A + 학년별 문법)
+    const studentGrade = (student as Record<string, unknown>).grade as number | null
+    const part3 = await buildPart3(studentId, studentGrade)
 
     jobs.push({
       studentName: student.name,
