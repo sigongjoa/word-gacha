@@ -62,8 +62,8 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
         }),
       },
     )
-    if (res.status === 429) return '' // 할당량 초과 — 빈 문자열 반환
     const data = await res.json()
+    if (!res.ok) return ''  // 429 포함 모든 에러 → 빈 문자열 (Part2/3 건너뜀)
     const parts: { text?: string; thought?: boolean }[] =
       data.candidates?.[0]?.content?.parts ?? []
     const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]

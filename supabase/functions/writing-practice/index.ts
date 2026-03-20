@@ -103,7 +103,11 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
       },
     )
     const data = await res.json()
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!res.ok) return `__GEMINI_ERROR_${res.status}__`
+    const parts: { text?: string; thought?: boolean }[] =
+      data.candidates?.[0]?.content?.parts ?? []
+    const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
+    return textPart?.text ?? ''
   } catch {
     return ''
   }
@@ -187,6 +191,8 @@ Deno.serve(async (req) => {
     })
 
     const raw = await callGemini(prompt, GEMINI_KEY)
+    if (raw.startsWith('__GEMINI_ERROR_429__')) return json({ error: 'AI 할당량을 초과했습니다. 잠시 후 다시 시도해주세요.' }, 429)
+    if (raw.startsWith('__GEMINI_ERROR_')) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
     const problem = parseObj(raw)
     if (!problem?.instruction) return json({ error: '문제 생성 실패. 다시 시도해주세요.' }, 500)
 

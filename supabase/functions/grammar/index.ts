@@ -17,7 +17,10 @@ async function callGemini(prompt: string): Promise<string> {
     }
   )
   const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '답변 생성 실패'
+  const parts: { text?: string; thought?: boolean }[] =
+    data.candidates?.[0]?.content?.parts ?? []
+  const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
+  return textPart?.text?.trim() ?? '답변 생성 실패'
 }
 
 Deno.serve(async (req) => {
