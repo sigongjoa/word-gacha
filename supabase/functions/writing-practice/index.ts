@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { json } from '../_shared/auth.ts'
+import { callGemini } from '../_shared/gemini.ts'
 
 // ── $variable$ 치환 ────────────────────────────────────────────
 function fill(template: string, vars: Record<string, string>): string {
@@ -89,29 +90,6 @@ const TYPES: Record<string, { label: string; guide: string; length: string }> = 
 }
 
 // ── Gemini 호출 ────────────────────────────────────────────────
-async function callGemini(prompt: string, apiKey: string): Promise<{ text: string; status: number }> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 2048 },
-        }),
-      },
-    )
-    if (!res.ok) return { text: '', status: res.status }
-    const data = await res.json()
-    const parts: { text?: string; thought?: boolean }[] =
-      data.candidates?.[0]?.content?.parts ?? []
-    const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
-    return { text: textPart?.text ?? '', status: 200 }
-  } catch {
-    return { text: '', status: 500 }
-  }
-}
 
 function parseObj(text: string): Record<string, unknown> | null {
   try {
@@ -140,8 +118,7 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
-  if (!GEMINI_KEY) return json({ error: 'GEMINI_API_KEY 미설정' }, 500)
+
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -190,7 +167,7 @@ Deno.serve(async (req) => {
       problem_type: typeKey,
     })
 
-    const { text: raw, status: geminiStatus } = await callGemini(prompt, GEMINI_KEY)
+    const { text: raw, status: geminiStatus } = await callGemini(prompt, { temperature: 0.85 })
     if (geminiStatus === 429) return json({ error: 'AI 사용량이 초과되었습니다. 내일 다시 시도해주세요.' }, 429)
     if (geminiStatus !== 200) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
     const problem = parseObj(raw)
@@ -249,7 +226,7 @@ Deno.serve(async (req) => {
       word_usage_tpl: wordUsageTpl,
     })
 
-    const { text: raw, status: geminiStatus2 } = await callGemini(prompt, GEMINI_KEY)
+    const { text: raw, status: geminiStatus2 } = await callGemini(prompt, { temperature: 0.85 })
     if (geminiStatus2 === 429) return json({ error: 'AI 사용량이 초과되었습니다. 내일 다시 시도해주세요.' }, 429)
     if (geminiStatus2 !== 200) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
     const grade = parseObj(raw)

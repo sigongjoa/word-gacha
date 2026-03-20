@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
+import { callGemini as _callGemini } from '../_shared/gemini.ts'
 
 // Anki 박스 가중치 단어 선택
 function selectWords(words: Record<string, unknown>[], max: number) {
@@ -48,29 +49,10 @@ async function getThesaurus(word: string) {
   }
 }
 
-// Gemini API 호출 (thinking 파트 제외)
-async function callGemini(prompt: string, apiKey: string): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-        }),
-      },
-    )
-    const data = await res.json()
-    if (!res.ok) return ''  // 429 포함 모든 에러 → 빈 문자열 (Part2/3 건너뜀)
-    const parts: { text?: string; thought?: boolean }[] =
-      data.candidates?.[0]?.content?.parts ?? []
-    const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
-    return textPart?.text ?? ''
-  } catch {
-    return ''
-  }
+// Gemini 호출 래퍼 — 실패 시 빈 문자열 (Part2/3 건너뜀)
+async function callGemini(prompt: string): Promise<string> {
+  const { text } = await _callGemini(prompt)
+  return text
 }
 
 // Gemini 응답에서 JSON 파싱 (마크다운 코드블록 처리)
@@ -118,8 +100,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (!await verifyAdmin(req)) return unauthorized()
 
-  const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
-  if (!GEMINI_KEY) return json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다. Supabase secrets에 추가하세요.' }, 500)
+
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -191,7 +172,7 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
       if (needed <= 0) break
       // 남은 개수만큼의 문법 항목으로 재시도
       const pendingItems = selected.slice(results.length, results.length + needed)
-      const res = await callGemini(buildPrompt(pendingItems), GEMINI_KEY)
+      const res = await callGemini(buildPrompt(pendingItems))
       const valid = (parseJSON(res) ?? []).filter(validateProblem)
       results.push(...valid)
     }
@@ -277,7 +258,7 @@ ${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         const pending = vocabItems.filter((v) => !sentences.has(v._id))
         if (!pending.length) break
-        const res = await callGemini(buildSentencePrompt(pending), GEMINI_KEY)
+        const res = await callGemini(buildSentencePrompt(pending))
         const parsed = parseJSON(res) ?? []
         for (const p of parsed) {
           const item = p as Record<string, unknown>

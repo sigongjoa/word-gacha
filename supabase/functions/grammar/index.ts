@@ -1,27 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
-
-const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY')
-
-async function callGemini(prompt: string): Promise<string> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
-      }),
-    }
-  )
-  const data = await res.json()
-  const parts: { text?: string; thought?: boolean }[] =
-    data.candidates?.[0]?.content?.parts ?? []
-  const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
-  return textPart?.text?.trim() ?? '답변 생성 실패'
-}
+import { callGemini } from '../_shared/gemini.ts'
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
@@ -53,9 +33,12 @@ Deno.serve(async (req) => {
       .from('grammar_qa').select('question').eq('id', id).single()
     if (ge || !g) return json({ error: '항목을 찾을 수 없습니다' }, 404)
 
-    const answer = await callGemini(
-      `다음 영어 문법 질문에 한국어로 간결하고 명확하게 답변해주세요.\n\n질문: ${g.question}\n\n답변:`
+    const { text: answer, status: gs } = await callGemini(
+      `다음 영어 문법 질문에 한국어로 간결하고 명확하게 답변해주세요.\n\n질문: ${g.question}\n\n답변:`,
+      { temperature: 0.3, maxTokens: 512 }
     )
+    if (gs === 429) return json({ error: 'AI 사용량 초과. 잠시 후 다시 시도해주세요.' }, 429)
+    if (gs !== 200) return json({ error: '답변 생성 실패' }, 500)
     const { data, error } = await supabase
       .from('grammar_qa')
       .update({ answer, status: 'answered', answered_by: 'ai' })
