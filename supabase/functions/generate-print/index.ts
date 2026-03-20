@@ -48,7 +48,7 @@ async function getThesaurus(word: string) {
   }
 }
 
-// Gemini 1.5 Flash API 호출
+// Gemini API 호출 (thinking 파트 제외)
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
   try {
     const res = await fetch(
@@ -62,8 +62,12 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
         }),
       },
     )
+    if (res.status === 429) return '' // 할당량 초과 — 빈 문자열 반환
     const data = await res.json()
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    const parts: { text?: string; thought?: boolean }[] =
+      data.candidates?.[0]?.content?.parts ?? []
+    const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
+    return textPart?.text ?? ''
   } catch {
     return ''
   }
@@ -88,11 +92,25 @@ function validateProblem(p: unknown): boolean {
   if (!prob.sentence || typeof prob.sentence !== 'string' || !prob.sentence.includes('_____')) return false
   // answer 비어있으면 안 됨
   if (!prob.answer || typeof prob.answer !== 'string' || !prob.answer.trim()) return false
-  // options: 4개 이상, 빈 항목 없음, answer 포함
+  // options: 4개 이상, 빈 항목 없음
   if (!Array.isArray(prob.options) || prob.options.length < 4) return false
   if ((prob.options as unknown[]).some((o) => !o || typeof o !== 'string' || !(o as string).trim())) return false
-  if (!(prob.options as string[]).includes(prob.answer as string)) return false
   return true
+}
+
+// 유효성 통과 후 options에 answer 보정 (Gemini가 options에 answer를 빠뜨린 경우 대비)
+function fixOptions(p: Record<string, unknown>): Record<string, unknown> {
+  const answer = p.answer as string
+  const options = [...(p.options as string[])]
+  if (!options.includes(answer)) {
+    // 마지막 오답을 정답으로 교체 후 셔플
+    options[options.length - 1] = answer
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[options[i], options[j]] = [options[j], options[i]]
+    }
+  }
+  return { ...p, options }
 }
 
 Deno.serve(async (req) => {
@@ -201,7 +219,16 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
       }),
     )
 
-    const vocabInputs = thesaurusResults
+    // answer/type/distractors를 코드에서 미리 확정
+    type VocabItem = {
+      _id: number
+      answer: string
+      type: 'synonym' | 'antonym'
+      hint_ko: string
+      distractors: string[]
+    }
+
+    const vocabItems: VocabItem[] = thesaurusResults
       .filter((d) => d.synonyms.length > 0 || d.antonyms.length > 0)
       .map((d) => {
         const useSynonym = d.synonyms.length > 0 &&
@@ -212,65 +239,69 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
           .filter((w) => w !== answer && w !== (d.word.english as string))
           .slice(0, 3)
         return {
-          original: d.word.english,
-          original_ko: d.word.korean,
+          _id: 0,
           answer,
-          type: useSynonym ? 'synonym' : 'antonym',
+          type: (useSynonym ? 'synonym' : 'antonym') as 'synonym' | 'antonym',
+          hint_ko: d.word.korean as string,
           distractors,
         }
       })
       .filter((d) => d.distractors.length >= 3)
       .slice(0, 5)
+      .map((d, i) => ({ ...d, _id: i }))
 
     let part2: unknown[] = []
-    if (vocabInputs.length > 0) {
-      // id 부여해서 어떤 입력이 실패했는지 추적
-      const taggedInputs = vocabInputs.map((v, i) => ({ ...v, _id: i }))
+    if (vocabItems.length > 0) {
+      // Gemini에게는 "이 단어가 빈칸에 들어가는 문장만 만들어줘"만 요청
+      const buildSentencePrompt = (items: VocabItem[]) =>
+        `수능 스타일 영어 문장을 만들어줘. 각 단어가 빈칸(_____) 자리에 자연스럽게 들어가는 문장 하나씩.
 
-      const buildVocabPrompt = (inputs: typeof taggedInputs) =>
-        `너는 수능 영어 교사야. 다음 데이터를 바탕으로 빈칸 어휘 문제를 만들어줘.
+단어 목록:
+${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
 
 규칙:
-- 자연스러운 영어 문장에 빈칸(_____) 포함 (필수)
-- 빈칸에는 answer 단어가 문맥상 자연스럽게 들어감
-- 수능 지문 스타일 (학문적, 간결한 영어)
-- type이 synonym이면 유의어, antonym이면 반의어가 answer임
-- options 배열에 answer가 반드시 포함되어야 함
-- 각 입력의 _id를 출력에 그대로 포함할 것
+- 각 문장에 반드시 _____ 포함 (빈칸 자리)
+- 수능 지문 수준의 자연스러운 영어
+- 다른 텍스트 없이 JSON 배열만 응답
 
-입력:
-${JSON.stringify(inputs)}
-
-반드시 아래 JSON 배열로만 응답 (다른 텍스트 없이):
-[{"_id":0,"sentence":"...","answer":"...","options":["답1","답2","답3","답4"],"type":"synonym","hint_ko":"한국어힌트"}]
-
-options는 answer + distractors 4개를 랜덤 순서로.`
+[{"_id":0,"sentence":"문장..._____...문장"}]`
 
       const MAX_RETRIES = 3
-      const solved = new Map<number, unknown>() // _id → valid problem
+      const sentences = new Map<number, string>() // _id → sentence
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        const pending = taggedInputs.filter((v) => !solved.has(v._id))
+        const pending = vocabItems.filter((v) => !sentences.has(v._id))
         if (!pending.length) break
-        const res = await callGemini(buildVocabPrompt(pending), GEMINI_KEY)
-        const valid = (parseJSON(res) ?? []).filter(validateProblem)
-        for (const p of valid) {
-          const prob = p as Record<string, unknown>
-          const id = prob._id as number
-          if (typeof id === 'number' && !solved.has(id)) {
-            solved.set(id, p)
+        const res = await callGemini(buildSentencePrompt(pending), GEMINI_KEY)
+        const parsed = parseJSON(res) ?? []
+        for (const p of parsed) {
+          const item = p as Record<string, unknown>
+          const id = item._id as number
+          const sentence = item.sentence as string
+          if (
+            typeof id === 'number' &&
+            typeof sentence === 'string' &&
+            sentence.includes('_____') &&
+            !sentences.has(id) &&
+            vocabItems.some((v) => v._id === id)
+          ) {
+            sentences.set(id, sentence)
           }
         }
       }
 
-      // _id 순서 유지, _id 필드 제거
-      part2 = taggedInputs
-        .map((v) => solved.get(v._id))
-        .filter(Boolean)
-        .map((p) => {
-          const { _id, ...rest } = p as Record<string, unknown>
-          void _id
-          return rest
+      // answer + distractors로 options 직접 조립 (Gemini 관여 없음)
+      part2 = vocabItems
+        .filter((v) => sentences.has(v._id))
+        .map((v) => {
+          const options = shuffle([v.answer, ...v.distractors])
+          return {
+            sentence: sentences.get(v._id),
+            answer: v.answer,
+            options,
+            type: v.type,
+            hint_ko: v.hint_ko,
+          }
         })
     }
 
