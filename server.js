@@ -1,4 +1,9 @@
 require('dotenv').config();
+
+// ── 필수 환경변수 검증 (기동 시 즉시 실패) ────────────────────────
+if (!process.env.SESSION_SECRET) throw new Error('SESSION_SECRET 환경변수가 설정되지 않았습니다');
+if (!process.env.ADMIN_PASSWORD) throw new Error('ADMIN_PASSWORD 환경변수가 설정되지 않았습니다');
+
 const express  = require('express');
 const cors     = require('cors');
 const path     = require('path');
@@ -266,7 +271,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'word-gacha-secret',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -301,7 +306,7 @@ function handle(fn) {
 app.post('/api/auth/login', (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: '비밀번호를 입력하세요' });
-  if (password !== (process.env.ADMIN_PASSWORD || 'admin1234')) {
+  if (password !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: '비밀번호가 틀렸습니다' });
   }
   req.session.isAdmin = true;
@@ -605,6 +610,7 @@ app.get('/api/schools', (req, res) => {
 // 특정 교재 단어 목록
 app.get('/api/textbook/:textbookId/words', handle(async (req, res) => {
   const { textbookId } = req.params;
+  if (!/^[a-zA-Z0-9_-]+$/.test(textbookId)) return res.status(400).json({ error: '잘못된 교재 ID입니다' });
   const unit = req.query.unit ? Number(req.query.unit) : null;
   const file = path.join(TEXTBOOKS_DIR, `${textbookId}.json`);
   if (!fs.existsSync(file)) return res.status(404).json({ error: '교재 데이터가 없습니다' });
@@ -617,6 +623,7 @@ app.get('/api/textbook/:textbookId/words', handle(async (req, res) => {
 // 특정 교재 문법 목록
 app.get('/api/textbook/:textbookId/grammar', handle(async (req, res) => {
   const { textbookId } = req.params;
+  if (!/^[a-zA-Z0-9_-]+$/.test(textbookId)) return res.status(400).json({ error: '잘못된 교재 ID입니다' });
   const unit = req.query.unit ? Number(req.query.unit) : null;
   const file = path.join(TEXTBOOKS_DIR, `${textbookId}.json`);
   if (!fs.existsSync(file)) return res.status(404).json({ error: '교재 데이터가 없습니다' });

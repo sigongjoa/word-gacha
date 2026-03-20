@@ -87,7 +87,6 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
 .qa-pending { color: #92400e; font-size: .85rem; padding: 8px 12px; background: #fef3c7; border-radius: 8px; }
 .qa-footer { display: flex; align-items: center; margin-top: 10px; }
 .qa-mine-badge { font-size: .68rem; padding: 2px 8px; border-radius: 20px; background: #dbeafe; color: #1e40af; font-weight: 700; }
-.btn-delete-q { font-size: .72rem; padding: 4px 10px; border: none; border-radius: 8px; background: #fee2e2; color: #991b1b; cursor: pointer; font-weight: 600; margin-left: auto; }
 
 /* ── Unit Selector ── */
 .unit-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
@@ -385,7 +384,6 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
           : `<div class="qa-pending">⏳ 선생님 답변을 기다리는 중이에요</div>`}
         <div class="qa-footer">
           <span class="qa-mine-badge">내 질문</span>
-          <button class="btn-delete-q" onclick="deleteMyQuestion('${g.id}')">삭제</button>
         </div>
       </div>`).join('');
   }
@@ -413,11 +411,6 @@ textarea.input-field { resize: vertical; min-height: 88px; line-height: 1.6; fon
     } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
   }
 
-  async function deleteMyQuestion(id) {
-    if (!confirm('질문을 삭제할까요?')) return;
-    try { await API.deleteGrammarQuestion(id, studentId); loadGrammar(); }
-    catch (e) { alert(e.message); }
-  }
   document.getElementById('addGrammarBtn').onclick = addGrammarQuestion;
 
   // ── 교재 단어 ─────────────────────────────────────────────────

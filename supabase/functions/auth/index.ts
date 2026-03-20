@@ -10,7 +10,8 @@ Deno.serve(async (req) => {
 
   if (req.method === 'POST' && path === '/login') {
     const { password } = await req.json()
-    const adminPw = Deno.env.get('ADMIN_PASSWORD') ?? 'admin1234'
+    const adminPw = Deno.env.get('ADMIN_PASSWORD')
+    if (!adminPw) return json({ error: '서버 설정 오류: ADMIN_PASSWORD 미설정' }, 500)
     if (password !== adminPw) return json({ error: '비밀번호가 틀렸습니다' }, 401)
     const token = await getAdminToken()
     return json({ success: true, token })

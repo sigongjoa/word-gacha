@@ -220,7 +220,9 @@ Deno.serve(async (req) => {
       .from('writing_sessions').select('*').eq('id', sessionId).single()
     if (!session) return json({ error: '세션 없음' }, 404)
 
+    // 세션 소유권 검증: 요청한 studentId와 세션의 student_id가 일치해야 함
     const sess = session as Record<string, unknown>
+    if (sess.student_id !== studentId) return json({ error: '권한 없음' }, 403)
     const problem = sess.problem as Record<string, unknown>
     const targetWords = sess.target_words as { id: string; english: string; korean: string }[]
 

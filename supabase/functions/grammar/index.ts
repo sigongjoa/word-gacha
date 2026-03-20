@@ -118,21 +118,10 @@ Deno.serve(async (req) => {
     return json(data)
   }
 
-  // ── DELETE /grammar/:id ──────────────────────────────────────
+  // ── DELETE /grammar/:id ────────────────── (관리자 전용)
+  // 학생 ID를 요청에서 그대로 신뢰하면 IDOR가 발생하므로 관리자만 삭제 가능
   if (req.method === 'DELETE' && id) {
-    const isAdmin = await verifyAdmin(req)
-    const studentId = url.searchParams.get('student_id')
-
-    if (!isAdmin && !studentId) return unauthorized()
-
-    if (!isAdmin && studentId) {
-      // 학생 본인 질문만 삭제 가능
-      const { data: g, error: ge } = await supabase
-        .from('grammar_qa').select('student_id').eq('id', id).single()
-      if (ge || !g) return json({ error: '항목을 찾을 수 없습니다' }, 404)
-      if (g.student_id !== studentId) return json({ error: '삭제 권한이 없습니다' }, 403)
-    }
-
+    if (!await verifyAdmin(req)) return unauthorized()
     const { error } = await supabase.from('grammar_qa').delete().eq('id', id)
     if (error) return json({ error: error.message }, 500)
     return json({ success: true })
