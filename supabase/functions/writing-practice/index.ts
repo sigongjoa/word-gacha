@@ -206,6 +206,8 @@ Deno.serve(async (req) => {
     // 세션 소유권 검증: 요청한 studentId와 세션의 student_id가 일치해야 함
     const sess = session as Record<string, unknown>
     if (sess.student_id !== studentId) return json({ error: '권한 없음' }, 403)
+    // 중복 채점 방지: 이미 채점된 세션은 box 업데이트를 건너뜀
+    const alreadyGraded = !!sess.grade
     const problem = sess.problem as Record<string, unknown>
     const targetWords = sess.target_words as { id: string; english: string; korean: string }[]
 
@@ -239,7 +241,8 @@ Deno.serve(async (req) => {
     await Promise.all(targetWords.map(async (w) => {
       const used = wordUsage[w.english] === true
       wordUpdates.push({ id: w.id, english: w.english, used })
-      if (!used) return
+      // 첫 채점 시에만 box 업데이트 (중복 호출 시 누적 방지)
+      if (!used || alreadyGraded) return
       const { data: wd } = await supabase.from('words').select('box').eq('id', w.id).single()
       if (!wd) return
       const newBox = Math.min((wd as Record<string, number>).box + 1, 5)

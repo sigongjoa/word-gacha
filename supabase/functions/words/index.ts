@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const { student_id, english, korean, blank_type } = await req.json()
     if (!english?.trim()) return json({ error: '영어 단어를 입력하세요' }, 400)
     if (!korean?.trim()) return json({ error: '한국어 뜻을 입력하세요' }, 400)
-    const VALID_BLANK_TYPES = ['korean', 'english']
+    const VALID_BLANK_TYPES = ['korean', 'english', 'both']
     const safeBlankType = VALID_BLANK_TYPES.includes(blank_type) ? blank_type : 'korean'
     const { data, error } = await supabase.from('words').insert({
       student_id,

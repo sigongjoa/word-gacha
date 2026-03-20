@@ -3,13 +3,14 @@ const API = {
 
   async _fetch(path, options = {}) {
     const token = this._token()
+    const { headers: extraHeaders, ...restOptions } = options
     const res = await fetch(CONFIG.FUNCTIONS_URL + path, {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        ...options.headers,
+        ...extraHeaders,
       },
-      ...options,
+      ...restOptions,
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }))

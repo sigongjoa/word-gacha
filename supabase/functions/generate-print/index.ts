@@ -4,10 +4,13 @@ import { verifyAdmin, json, unauthorized } from '../_shared/auth.ts'
 import { callGemini as _callGemini } from '../_shared/gemini.ts'
 
 // Anki 박스 가중치 단어 선택
+// box=5(마스터)는 weight=0 → 시험에 출제 안 됨
+const BOX_WEIGHTS: Record<number, number> = { 1: 5, 2: 3, 3: 2, 4: 1, 5: 0 }
+
 function selectWords(words: Record<string, unknown>[], max: number) {
   const weighted: Record<string, unknown>[] = []
   words.forEach((w) => {
-    const weight = [0, 5, 3, 2, 1][(w.box as number)] || 1
+    const weight = BOX_WEIGHTS[w.box as number] ?? 1
     for (let i = 0; i < weight; i++) weighted.push(w)
   })
   for (let i = weighted.length - 1; i > 0; i--) {
@@ -180,17 +183,24 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
     return results.slice(0, selected.length)
   }
 
-  // 학생별 처리
-  const jobs = []
+  // answer/type/distractors 타입 (루프 밖으로 이동)
+  type VocabItem = {
+    _id: number
+    answer: string
+    type: 'synonym' | 'antonym'
+    hint_ko: string
+    distractors: string[]
+  }
 
-  for (const studentId of studentIds) {
+  // 학생별 처리 — Promise.all로 병렬 실행
+  async function processStudent(studentId: string) {
     const { data: student } = await supabase
       .from('students').select('name, grade').eq('id', studentId).single()
-    if (!student) continue
+    if (!student) return null
 
     const { data: studentWords } = await supabase
       .from('words').select('*').eq('student_id', studentId).eq('status', 'approved')
-    if (!studentWords?.length) continue
+    if (!studentWords?.length) return null
 
     // Part 1: Anki 가중치로 단어 10개 선택
     const part1 = selectWords(studentWords, 10)
@@ -204,15 +214,6 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
         return { word: w, synonyms, antonyms }
       }),
     )
-
-    // answer/type/distractors를 코드에서 미리 확정
-    type VocabItem = {
-      _id: number
-      answer: string
-      type: 'synonym' | 'antonym'
-      hint_ko: string
-      distractors: string[]
-    }
 
     const vocabItems: VocabItem[] = thesaurusResults
       .filter((d) => d.synonyms.length > 0 || d.antonyms.length > 0)
@@ -238,7 +239,6 @@ options는 answer를 포함한 4개를 랜덤 순서로.`
 
     let part2: unknown[] = []
     if (vocabItems.length > 0) {
-      // Gemini에게는 "이 단어가 빈칸에 들어가는 문장만 만들어줘"만 요청
       const buildSentencePrompt = (items: VocabItem[]) =>
         `수능 스타일 영어 문장을 만들어줘. 각 단어가 빈칸(_____) 자리에 자연스럽게 들어가는 문장 하나씩.
 
@@ -253,7 +253,7 @@ ${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
 [{"_id":0,"sentence":"문장..._____...문장"}]`
 
       const MAX_RETRIES = 3
-      const sentences = new Map<number, string>() // _id → sentence
+      const sentences = new Map<number, string>()
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         const pending = vocabItems.filter((v) => !sentences.has(v._id))
@@ -276,7 +276,6 @@ ${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
         }
       }
 
-      // answer + distractors로 options 직접 조립 (Gemini 관여 없음)
       part2 = vocabItems
         .filter((v) => sentences.has(v._id))
         .map((v) => {
@@ -291,17 +290,15 @@ ${items.map((v) => `_id=${v._id} 단어="${v.answer}"`).join('\n')}
         })
     }
 
-    // Part 3: 학생별 개인화 문법 문제 (본인 질문 + 선생님 Q&A + 학년별 문법)
     const studentGrade = (student as Record<string, unknown>).grade as number | null
     const part3 = await buildPart3(studentId, studentGrade)
 
-    jobs.push({
-      studentName: student.name,
-      part1,
-      part2,
-      part3,
-    })
+    return { studentName: student.name, part1, part2, part3 }
   }
+
+  // 모든 학생 병렬 처리
+  const results = await Promise.all(studentIds.map(processStudent))
+  const jobs = results.filter(Boolean)
 
   return json({ jobs })
 })
