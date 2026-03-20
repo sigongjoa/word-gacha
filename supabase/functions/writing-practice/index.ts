@@ -89,7 +89,7 @@ const TYPES: Record<string, { label: string; guide: string; length: string }> = 
 }
 
 // ── Gemini 호출 ────────────────────────────────────────────────
-async function callGemini(prompt: string, apiKey: string): Promise<string> {
+async function callGemini(prompt: string, apiKey: string): Promise<{ text: string; status: number }> {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
@@ -102,14 +102,14 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
         }),
       },
     )
+    if (!res.ok) return { text: '', status: res.status }
     const data = await res.json()
-    if (!res.ok) return `__GEMINI_ERROR_${res.status}__`
     const parts: { text?: string; thought?: boolean }[] =
       data.candidates?.[0]?.content?.parts ?? []
     const textPart = parts.find((p) => !p.thought) ?? parts[parts.length - 1]
-    return textPart?.text ?? ''
+    return { text: textPart?.text ?? '', status: 200 }
   } catch {
-    return ''
+    return { text: '', status: 500 }
   }
 }
 
@@ -190,9 +190,9 @@ Deno.serve(async (req) => {
       problem_type: typeKey,
     })
 
-    const raw = await callGemini(prompt, GEMINI_KEY)
-    if (raw.startsWith('__GEMINI_ERROR_429__')) return json({ error: 'AI 할당량을 초과했습니다. 잠시 후 다시 시도해주세요.' }, 429)
-    if (raw.startsWith('__GEMINI_ERROR_')) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
+    const { text: raw, status: geminiStatus } = await callGemini(prompt, GEMINI_KEY)
+    if (geminiStatus === 429) return json({ error: 'AI 사용량이 초과되었습니다. 내일 다시 시도해주세요.' }, 429)
+    if (geminiStatus !== 200) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
     const problem = parseObj(raw)
     if (!problem?.instruction) return json({ error: '문제 생성 실패. 다시 시도해주세요.' }, 500)
 
@@ -249,7 +249,9 @@ Deno.serve(async (req) => {
       word_usage_tpl: wordUsageTpl,
     })
 
-    const raw = await callGemini(prompt, GEMINI_KEY)
+    const { text: raw, status: geminiStatus2 } = await callGemini(prompt, GEMINI_KEY)
+    if (geminiStatus2 === 429) return json({ error: 'AI 사용량이 초과되었습니다. 내일 다시 시도해주세요.' }, 429)
+    if (geminiStatus2 !== 200) return json({ error: 'AI 서비스 오류입니다. 잠시 후 다시 시도해주세요.' }, 500)
     const grade = parseObj(raw)
     if (grade?.total === undefined) return json({ error: '채점 실패. 다시 시도해주세요.' }, 500)
 
