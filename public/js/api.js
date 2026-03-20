@@ -92,9 +92,10 @@ const API = {
 
   // 수행평가 서술형 연습 (adminToken 제외 — no-verify-jwt 엔드포인트)
   async _fetchNoAuth(path, options = {}) {
+    const { headers: extraHeaders, ...restOptions } = options
     const res = await fetch(CONFIG.FUNCTIONS_URL + path, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-      ...options,
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
+      ...restOptions,
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }))
